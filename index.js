@@ -54,12 +54,21 @@ function lookupTerm(message) {
     findID = /value='(\d+)'/i;
     var ID=0;
     var tmpdir = tmp.dirSync();
-
     var searchTerm = message.content.match(findSearchTerm)[1];
 
     curl.request({url: 'http://pf2.easytool.es/php/search.php', method:'POST', data:'name='+searchTerm}, async function (err,response) {
-        ID = response.match(findID)[1];
-        console.log("Got ID of: "+ID);
+        try {
+            ID = response.match(findID)[1];
+            console.log("Got ID of: "+ID);
+        } catch (err) {
+            if (err instanceof TypeError) {
+                message.channel.send("Sorry, couldn't find anything when searching for "+searchTerm);
+                return;
+            } else {
+                throw err;
+            }
+
+        }
         
         await new Pageres({delay: 0, selector:'article.result', filename:'foo'})
             .src('http://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
