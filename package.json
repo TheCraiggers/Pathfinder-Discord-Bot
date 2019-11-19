@@ -1,0 +1,19 @@
+{
+    "name": "discordbot",
+    "version": "1.0.0",
+    "description": "A bot to help in Pathfinder2 games",
+    "main": "index.js",
+    "dependencies": {
+      "curlrequest": "^1.0.1",
+      "discord.js": "^11.5.1",
+      "pageres": "^5.2.0",
+      "tmp": "^0.1.0"
+    },
+    "devDependencies": {},
+    "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "TheCraiggers",
+    "license": "ISC"
+  }
+  
