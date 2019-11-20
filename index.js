@@ -19,7 +19,6 @@ client.on('message', msg => {
 });
 
 client.on('messageUpdate', (oldMessage, newMessage) => {
-    console.log(newMessage);
     if (newMessage.content.charAt(0) === '!') 
       handleMessage(newMessage);
   });
@@ -68,6 +67,7 @@ function lookupTerm(message) {
     curl.request({url: 'http://pf2.easytool.es/php/search.php', method:'POST', data:'name='+searchTerm}, async function (err,response) {
     
         responses = response.split('<button'); 
+        console.log("Got " + responses.length + " entries back from EasyTools");
         for (foo of responses) {
             result = findResult.exec(foo);
             if (result) {
@@ -78,7 +78,7 @@ function lookupTerm(message) {
         }
         console.log(searchResults);
         if (!searchResults || searchResults.length == 0) {
-            //Couldn't find any exact matches, lets try an extended search.
+            console.log("Couldn't find any exact matches, lets try an extended search...");
             for (foo of responses) {
                 result = findResultExtended.exec(foo);
                 if (result) {
@@ -101,6 +101,7 @@ function lookupTerm(message) {
             message.channel.send(disambiguousMessage);
         }
         
+        console.log("Getting screenshot...");
         await new Pageres({delay: 0, selector:'article.result', filename:'foo'})
             .src('http://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
             .dest(tmpdir.name)
