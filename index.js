@@ -42,7 +42,6 @@ function handleMessage(msg) {
             break;
         
         case '!lookup': {
-            msg.delete()
             lookupTerm(msg);
             break;
         }
@@ -50,24 +49,56 @@ function handleMessage(msg) {
 }
 
 function lookupTerm(message) {
-    findSearchTerm = /!lookup (.*)/;
-    findID = /value='(\d+)'/i;
     var ID=0;
+    var searchResults = [];
     var tmpdir = tmp.dirSync();
-    var searchTerm = message.content.match(findSearchTerm)[1];
+    
+    const findSearchTerm = /!lookup (\w+)\s?\(?(\d+)?\)?/i;
+    foo = message.content.match(findSearchTerm);
+    var searchTerm = foo[1];
+    if (foo.length > 1)
+        var disambiguousSelector = foo[2];
+
+    var disambiguousMessage = "Please select the correct result by editing your previous message with the selection in parenthesis at the end:\n\n";
+    var disambiguousMessageCount = 0;
+    const findID = /value='(\d+)'/i;
+    const findResult = new RegExp("<strong>(" + searchTerm + ")</strong>.*<small>(.*?)</small>.*value='(\\d+?)'","mis");
+    const findResultExtended = new RegExp("<strong>(.*?)</strong>.*<small>(.*?)</small>.*value='(\\d+?)'","mis");
 
     curl.request({url: 'http://pf2.easytool.es/php/search.php', method:'POST', data:'name='+searchTerm}, async function (err,response) {
-        try {
-            ID = response.match(findID)[1];
-            console.log("Got ID of: "+ID);
-        } catch (err) {
-            if (err instanceof TypeError) {
-                message.channel.send("Sorry, couldn't find anything when searching for "+searchTerm);
-                return;
-            } else {
-                throw err;
+    
+        responses = response.split('<button'); 
+        for (foo of responses) {
+            result = findResult.exec(foo);
+            if (result) {
+                searchResults.push(result);
+                disambiguousMessageCount++;
+                disambiguousMessage = disambiguousMessage + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
             }
-
+        }
+        console.log(searchResults);
+        if (!searchResults || searchResults.length == 0) {
+            //Couldn't find any exact matches, lets try an extended search.
+            for (foo of responses) {
+                result = findResultExtended.exec(foo);
+                if (result) {
+                    searchResults.push(result);
+                    disambiguousMessageCount++;
+                    disambiguousMessage = disambiguousMessage + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
+                }
+            }
+        }   
+        if (!searchResults || searchResults.length == 0) {
+            message.channel.send("Sorry, couldn't find anything when searching for "+searchTerm);
+            return;
+        }
+        
+        if (searchResults.length == 1) {
+            ID = searchResults[0][3];
+        } else if (disambiguousSelector) {
+            ID = searchResults[disambiguousSelector-1][3];
+        }else {
+            message.channel.send(disambiguousMessage);
         }
         
         await new Pageres({delay: 0, selector:'article.result', filename:'foo'})
