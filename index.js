@@ -109,7 +109,6 @@ function lookupTerm(message) {
     
         console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
         message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-        .then(console.log)
         .catch(console.error);
 
         tmp.setGracefulCleanup();
