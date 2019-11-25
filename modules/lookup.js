@@ -14,7 +14,7 @@ class lookup {
                 lookupTerm(newMessage);
             }   
         });
-        console.log('Successfully loaded plugin.');
+        console.log('Successfully loaded lookup plugin.');
     }
 }
 function lookupTerm(message) {
