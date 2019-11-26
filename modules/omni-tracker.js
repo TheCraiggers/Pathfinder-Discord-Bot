@@ -36,12 +36,16 @@ class OmniTracker {
     constructor (charData, combatData) {
         this.characters = {};
         this.time = new Date(0);
+        this.combat = null;
 
-        const PCregex = /PC,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
-        const effectRegex = /EFFECT,(?<name>\w+),(?<effect>.+),(?<duration>\d+)/;
-        const GMregex = /GM,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
+        const PCregex = /PC,(?<name>.+),(?<owner><@\d+>),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
+        const effectRegex = /EFFECT,(?<name>.+),(?<effect>.+),(?<duration>\d+)/;
+        const enemyRegex = /ENEMY,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
+        const dateRegex = /^DATE,(?<date>\d+)$/;
+        const initRegex = /^INIT,(?<name>.+),(?<init>\d+)$/;
+        const currentInitRegex = /^CURRENT_INIT,(?<init>\d+)$/;
 
-        var lines = charData.split('\n');
+        var lines = charData.content.split('\n');
         if (lines[0] != '[Omni Tracker]') {
             throw 'Invalid Bot Data. Expected Omni Tracker data.';
         }
@@ -56,7 +60,8 @@ class OmniTracker {
                     throw 'Bad data in Bot data! Expected PC, got ' + line;
                 }
                 parsed.groups.effects = {};
-                parsed.groups.monster = false;
+                parsed.groups.enemy = false;
+                parsed.groups.indent = ' '.repeat(parsed.groups.name.length + 1);
                 this.characters[parsed.groups.name] = parsed.groups;
             } else if (line.startsWith('EFFECT')) {
                 var parsed = line.match(effectRegex);
@@ -64,14 +69,47 @@ class OmniTracker {
                     throw 'Bad data in Bot data! Expected EFFECT, got ' + line;
                 }
                 this.characters[parsed.groups.name].effects[parsed.groups.effect] = parsed.groups;
-            } else if (line.startsWith('GM')) {
-                var parsed = line.match(GMregex);
+            } else if (line.startsWith('DATE')) {
+                var parsed = line.match(dateRegex);
                 if (!parsed) {
-                    throw 'Bad data in Bot data! Expected GM, got ' + line;
+                    throw 'Bad data in Bot data! Expected DATE, got ' + line;
                 }
-                parsed.groups.effects = {};
-                parsed.groups.monster = true;
-                this.characters[parsed.groups.name] = parsed.groups;
+                this.time = new Date(parsed.groups.date*1);
+            }
+        }
+
+        if (combatData) {
+            this.combat = {};
+            var lines = combatData.content.split('\n');
+            for (var line of lines) {
+                if (line.startsWith('ENEMY')) {
+                    var parsed = line.match(enemyRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected GM, got ' + line;
+                    }
+                    parsed.groups.effects = {};
+                    parsed.groups.enemy = true;
+                    parsed.groups.indent = ' '.repeat(parsed.groups.name.length + 1);
+                    this.characters[parsed.groups.name] = parsed.groups;
+                } else if (line.startsWith('EFFECT')) {
+                    var parsed = line.match(effectRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected EFFECT, got ' + line;
+                    }
+                    this.characters[parsed.groups.name].effects[parsed.groups.effect] = parsed.groups;
+                } else if (line.startsWith('INIT')) {
+                    var parsed = line.match(initRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected INIT, got ' + line;
+                    }
+                    this.characters[parsed.groups.name].init = parsed.groups.init;
+                } else if (line.startsWith('CURRENT_INIT')) {
+                    var parsed = line.match(currentInitRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected CURRENT_INIT, got ' + line;
+                    }
+                    this.combat.currentInit = parsed.groups.init;
+                }
             }
         }
     }
@@ -80,13 +118,88 @@ class OmniTracker {
         return this.time.toUTCString();
     }
 
+    getAmbiguousHP(currentHP, maxHP) {
+        var percentage = currentHP/maxHP;
+        if (percentage < .15) {
+            return 'Bloodied';
+        } else if (percentage < .5) {
+            return 'Bloodied';
+        } else if (percentage < 1) {
+            return 'Injured';
+        } else if (percentage == 1) {
+            return 'Healthy';
+        } else {
+            return 'Error?';
+        }
+    }
+
+    getDurationText(duration) {
+        if (duration > 86400) {
+            var foo = Math.round(duration/86400);
+            return `${foo} day${(foo>1) ? 's':''}`;
+        } else if (duration > 3600) {
+            var foo = Math.round(duration/3600);
+            return `${foo} hour${(foo>1) ? 's':''}`;
+        } else if (duration > 60) {
+            var foo = Math.round(duration/60);
+            return `${foo} minute${(foo>1) ? 's':''}`;
+        } else {
+            var foo = Math.round(duration/6);
+            return `${foo} round${(foo>1) ? 's':''}`;
+        }
+    }
+
+    sortCharsByInit() {
+        //Will return a sorted array of keys.
+        var foo = this.characters;
+        return Object.keys(foo).sort(function (a,b){ 
+            if (foo[a].init == foo[b].init) {
+                if (foo[a].enemy) {
+                    return -1;   //Enemies go first in PF2 and if they're both enemies or both PCs than who cares
+                } else {
+                    return 1;
+                }
+            } else {
+                return foo[b].init - foo[a].init;
+            }
+        });
+    }
+
     generateMessageText() {
         var output = '```CSS\n[Omni Tracker]\n';
         output += this.getDateText() + '\n\n';
+        var characters = Object.keys(this.characters);
+        if (this.combat) {
+            var combatIndent = '     | ';
+            //Need to sort by init
+            characters = this.sortCharsByInit();
+        } else {
+            var combatIndent = '';
+        }
 
-        for 
+        for (var character in characters) {
+            var foo = this.characters[characters[character]];       //ugh
+            if (this.combat) {
+                if (this.combat.currentInit == foo.init) {
+                    output += `> ${foo.init} | `;
+                } else {
+                    output += `  ${foo.init} | `;
+                }
+            }
+            if (foo.enemy) {
+                output += `${foo.name}: <${this.getAmbiguousHP(foo.currentHP, foo.maxHP)}>\n`;
+            } else {
+                output += `${foo.name}: ${foo.currentHP}/${foo.maxHP} AC:${foo.AC}\n`;
+            }
 
-        return output;
+            for (var effect of Object.keys(foo.effects)) {
+                var bar = foo.effects[effect];
+                output += `${combatIndent}${foo.indent} ${bar.effect} ${[this.getDurationText(bar.duration)]}\n`;
+            }
+            
+        }
+
+        return output + '```';
     }
 }
 
@@ -109,19 +222,34 @@ function init(message) {
     } else {
         botDataChannel.fetchMessages()
         .then(function(messages) {
+            var data = {botData: null, combatData: null};
             for (botData of messages) {
                 if (botData[1].content.startsWith('[Omni Tracker]')) {
                     //Found the data. Return it!
-                    return botData[1];
+                    data.botData = botData[1];
+                } else if (botData[1].content.startsWith('[Combat]')) {
+                    data.combatData = botData[1];
                 }
             }
-            //No Omni Tracker data found. Create it and return it!
-            return botDataChannel.send('[Omni Tracker]\nPC,Plunk,@TheCraiggers#4907,10,25,18\nEFFECT,Plunk,sick,345600');
+            if (!data.botData) {
+                //No Omni Tracker data found. Create it!
+                botDataChannel.send('[Omni Tracker]\nDATE,0')
+                .then(function (newBotData) {
+                    data.botData = newBotData;
+                    return data;    
+                });
+            } else {
+                return data;
+            }
         })
-        .then(function(botData){
-            //Using the data, we can now construct an Omni Tracker class object and use it to generate the message output
-            omniTracker = new OmniTracker(botData.content);
-            console.log(omniTracker.generateMessageText());
+        .then(function(data){
+            //Using the data, we can now construct an Omni Tracker class object and use it to
+            //create the message and pin it.
+            omniTracker = new OmniTracker(data.botData, data.combatData);
+            return message.channel.send(omniTracker.generateMessageText());
+        })
+        .then(function(newMessage) {
+            return newMessage.pin();
         })
         .catch(console.error);
 
