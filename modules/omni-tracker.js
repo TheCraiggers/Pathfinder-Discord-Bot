@@ -43,7 +43,7 @@ class OmniTracker {
         const enemyRegex = /ENEMY,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
         const dateRegex = /^DATE,(?<date>\d+)$/;
         const initRegex = /^INIT,(?<name>.+),(?<init>\d+)$/;
-        const currentInitRegex = /^CURRENT_INIT,(?<init>\d+)$/;
+        const currentInitRegex = /^CURRENT_INIT,(?<currentTurn>.+)$/;
 
         var lines = charData.content.split('\n');
         if (lines[0] != '[Omni Tracker]') {
@@ -108,7 +108,7 @@ class OmniTracker {
                     if (!parsed) {
                         throw 'Bad data in Bot data! Expected CURRENT_INIT, got ' + line;
                     }
-                    this.combat.currentInit = parsed.groups.init;
+                    this.combat.currentTurn = parsed.groups.currentTurn;
                 }
             }
         }
@@ -207,8 +207,6 @@ class OmniTracker {
         }
 
         return `{${dayName}, ${this.time.getUTCDate()} ${monthName}; ${hourName}}`;
-
-
     }
 
     getAmbiguousHP(currentHP, maxHP) {
@@ -273,7 +271,7 @@ class OmniTracker {
         for (var character in characters) {
             var foo = this.characters[characters[character]];       //ugh
             if (this.combat) {
-                if (this.combat.currentInit == foo.init) {
+                if (this.combat.currentTurn == foo.name) {
                     output += `> ${foo.init} | `;
                 } else {
                     output += `  ${foo.init} | `;
