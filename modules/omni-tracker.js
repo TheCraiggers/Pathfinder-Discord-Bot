@@ -115,7 +115,100 @@ class OmniTracker {
     }
 
     getDateText() {
-        return this.time.toUTCString();
+        //Pathfinder's calendar is basically just ours with different names. Boring, but easy!
+        var monthName;
+        var dayName;
+        var hourName;
+
+        switch (this.time.getUTCMonth()) {
+            case 0:
+                monthName = 'Abadius';
+                break;
+            case 1:
+                monthName = 'Calistril';
+                break;
+            case 2:
+                monthName = 'Pharast';
+                break;
+            case 3:
+                monthName = 'Gozran';
+                break;
+            case 4:
+                monthName = 'Desnus';
+                break;
+            case 5:
+                monthName = 'Sarenith';
+                break;
+            case 6:
+                monthName = 'Erastus';
+                break;
+            case 7:
+                monthName = 'Arodus';
+                break;
+            case 8:
+                monthName = 'Rova';
+                break;
+            case 9:
+                monthName = 'Lamashan';
+                break;
+            case 10:
+                monthName = 'Neth';
+                break;
+            case 11:
+                monthName = 'Kuthona';
+                break;
+        }
+
+        //Days of week
+        switch (this.time.getUTCDay()) {
+            case 0:
+                dayName = 'Sunday';
+                break;
+            case 1:
+                dayName = 'Moonday';
+                break;
+            case 2:
+                dayName = 'Toilday';
+                break;
+            case 3:
+                dayName = 'Wealday';
+                break;
+            case 4:
+                dayName = 'Oathday';
+                break;
+            case 5:
+                dayName = 'Fireday';
+                break;
+            case 6:
+                dayName = 'Starday';
+                break;
+        }
+
+        //Time of day. We stay vague, so hours is enough
+        var hourNumber = this.time.getUTCHours();
+        if (7 <  hourNumber && hourNumber < 10 ) {
+            hourName = 'Morning';
+        } else if (10 <  hourNumber && hourNumber < 12 ) {
+            hourName = 'Late Morning';
+        } else if (12 <  hourNumber && hourNumber < 15 ) {
+            hourName = 'Afternoon';
+        } else if (15 <  hourNumber && hourNumber < 19 ) {
+            hourName = 'Evening';
+        } else if (19 <  hourNumber && hourNumber < 20 ) {
+            hourName = 'Dusk';
+        } else if (20 <  hourNumber && hourNumber < 24 ) {
+            hourName = 'Night';
+        } else if (0 <  hourNumber && hourNumber < 6 ) {
+            hourName = 'Night';
+        } else if (6 <  hourNumber && hourNumber < 7 ) {
+            hourName = 'Dawn';
+        } else {
+            hourName = 'Error!';
+        }
+
+        return `{${dayName}, ${this.time.getUTCDate()} ${monthName}; ${hourName}}`;
+
+
     }
 
     getAmbiguousHP(currentHP, maxHP) {
@@ -252,38 +345,6 @@ function init(message) {
             return newMessage.pin();
         })
         .catch(console.error);
-
-        /*
-        //Second, lets create the message and pin it.
-        command = message.content.match(omniTrackerInitCommand);
-        if (!command) {
-            message.channel.send('Invalid command. Usage is !omni init <name>');
-        } else {
-            var omniTrackerHeader = '```css\n[Omni Tracker] ' + command.groups.omniTrackerName + '\n```';
-        }
-        
-        message.channel.send(omniTrackerHeader)
-        .then(function(newMessage) {
-            return newMessage.pin()
-        })
-        .then(function(newMessage) {
-            console.log(newMessage);
-        })
-        .catch(console.error);
-
-
-        message.channel.fetchPinnedMessages()
-        .then(function(messagesCollection) {
-            for (msg of messagesCollection) {
-                pinnedMessageRegex = msg[1].content.match(findTimeTrackerRegex);
-                if (pinnedMessageRegex) {
-                    console.log(pinnedMessageRegex);
-                    OmniTrackerPinnedMessageToCopy = msg[1];
-                }
-            }
-        })
-        .catch(console.error);    
-*/
     }
     
 }
