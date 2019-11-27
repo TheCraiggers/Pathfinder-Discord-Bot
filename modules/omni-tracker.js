@@ -1,19 +1,39 @@
-/*
-This handles time, HP, stats, and condition management in the game. To make it easier on everyone we still use 24hour days, with the sun rising at 7am and setting at 7pm.
-Commands can be typed anywhere, and they will update all trackers present across all channels.
+var helpMessage = `
+\`\`\`
+Most commands follow the '!omni <verb> <noun> <target> <options>' pattern
 
-Example commands:
+!omni help                                      (Displays this.)
+!omni init                                      (Create an omni tracker in this channel. All trackers update together.)
+!omni init GM                                   (Create a GM omni tracker in this channel. GM Trackers show more info than normal trackers, like enemy health.)
+!omni show                                      (Post the full contents to the channel.)
+!omni add player Bob                            (Add a new player Bob controlled by the person who typed the command.)
+!omni remove player Bob                         (Add a new player Bob controlled by the person who typed the command.)
+!omni set Bob AC 20 HP 15                       (Set Bob's AC to 20 and current HP to 15.)
+!omni damage Bob 5                              (Deal 5 damage to Bob.)
+!omni heal Bob 5                                (Heal Bob for 5 HP.)
+!omni add effect Bob dizzy 5 rounds             (Make Bob dizzy for 5 rounds.)
+!omni add effect Bob sick 2 days                (Makes Bob sick for 2 days.)
+!omni remove effect Bob Dizzy                   (Remove Dizzy from Bob prematurely)
+!omni add effect !players Insprired 1 round     (Gives all PCs the Inspired effect)
+!omni add effect !everyone On Fire 1 round      (Makes enemies and players on fire)
+!omni add effect !enemies Dumb 1 round          (Gives all enemies the dumb effect)
+\`\`\`
+`
+var gmHelpMessage = `
+\`\`\`
+GM Commands:
 
-!omni init                      (Create an omni tracker in this channel. All trackers update together.)
-!time add Bob dizzy 2 hours     (Adds the dizzy effect to Bob that will last 2 hours)
-!time 10min                     (Moves time forward 10 minutes)
-!time 5 hours                   (Moves time forward 5 hours)
-!time 13:00                     (Moves time forward until it's 13:00)
-!time tomorrow                  (Moves time forward until it's tomorrow morning)
-!time remove Bob dizzy          (Removes dizzy from bob)
-!time help                      (Basicially displays this)
-
-*/
+!omni add enemy 8 Skeleton AC 12 HP 5       (Adds 8 Skeletons to combat- will be named 'Skeleton 1' through 'Skeleton 8')
+!omni add enemy War Boss AC 40 HP 300
+!omni add time 10min                        (Moves time forward by 10 minutes)
+!omni add time 5 hours
+!omni set time tomorrow                     (Moves time forward until it's tomorrow morning)
+!omni set time 13:00                        (Moves time forward until it's 1pm)
+!omni set init Bob 15                       (Change Bob's initiative to 15)
+!omni set init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
+!omni next init                             (When in combat, move to next character's turn)
+\`\`\`
+`;
 
 class omniPlugin {
     constructor (client) {
@@ -225,13 +245,13 @@ class OmniTracker {
     }
 
     getDurationText(duration) {
-        if (duration > 86400) {
+        if (duration >= 86400) {
             var foo = Math.round(duration/86400);
             return `${foo} day${(foo>1) ? 's':''}`;
-        } else if (duration > 3600) {
+        } else if (duration >= 3600) {
             var foo = Math.round(duration/3600);
             return `${foo} hour${(foo>1) ? 's':''}`;
-        } else if (duration > 60) {
+        } else if (duration >= 60) {
             var foo = Math.round(duration/60);
             return `${foo} minute${(foo>1) ? 's':''}`;
         } else {
@@ -298,10 +318,16 @@ const omniTrackerInitCommand = new RegExp('^!omni init$','i');
 const findTimeTrackerRegex = new RegExp('^```css\\n\\[Omni Tracker\\] ?(?<omniTrackerName>.*)?$','mi');
 
 function handleCommand(message) {
-    if (message.content.startsWith('!omni init'))
+    if (message.content.startsWith('!omni init')) {
         init(message);
-    else if (/!time add/i.test(message.content))
-        add(message);
+    } else if (message.content.startsWith('!omni help')) {
+        message.author.send(helpMessage)
+        .then(function() {
+            message.author.send(gmHelpMessage);
+        })
+        .catch(console.error);
+    }
+
 }
 
 function init(message) {
