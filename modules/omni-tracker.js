@@ -349,6 +349,16 @@ class OmniTracker {
 const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<options>.*)?$/;
 
 function handleCommand(message) {
+    
+    if (message.content.startsWith('!omni help')) {
+        message.author.send(helpMessage)
+        .then(function() {
+            message.author.send(gmHelpMessage);
+        })
+        .catch(console.error);
+        return;
+    }
+    
     var command = message.content.match(commandRegex);
     if (!command) {
         message.reply('Invalid !omni command. Use !omni help if needed.');
@@ -358,18 +368,6 @@ function handleCommand(message) {
         case 'tracker':
             manageTracker(command, message);
             break;
-        
-    }
-
-    if (message.content.startsWith('!omni init')) {
-        init(message);
-
-    } else if (message.content.startsWith('!omni help')) {
-        message.author.send(helpMessage)
-        .then(function() {
-            message.author.send(gmHelpMessage);
-        })
-        .catch(console.error);
     }
 
 }
@@ -409,7 +407,6 @@ function getBotDataMessages(message) {
 }
 
 function manageTracker(command, message) {
-
     switch (command.groups.verb) {
         case 'remove':
             message.channel.fetchPinnedMessages()
