@@ -1,15 +1,14 @@
 var helpMessage = `
 \`\`\`
-Most commands follow the '!omni <verb> <noun> <target> <options>' pattern
+Most commands follow the '!omni <verb> <noun> <target> <properties>' pattern
 Verbs: add, set, remove
-Nouns: tracker, player, effect, enemy, time
+Nouns: tracker, player, effect, enemy, time, shield, property
 Targets: names of players or enemies (quotes required if there are spaces), !players, !enemies, !everybody, !everyone
-Options: used for setting durations, hit points, etc. AC, HP, etc.
+Properties: used for setting durations, hit points, etc. AC, HP, etc.
 
 Some commands are typed so often I provided shorter aliases for them. This doesn't mean the longer version doesn't work though!
 
 Aliases:
-
 
 !omni help                                      (Displays this.)
 !omni add tracker here players                  (Create an omni tracker for players in this channel.)
@@ -63,19 +62,59 @@ class omniPlugin {
 module.exports = (client) => { return new omniPlugin(client) }
 
 class OmniTracker {
-    constructor (charData, combatData) {
+    static getBotDataMessages(message) {
+        return new Promise(function(resolve, reject) {
+            //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
+            var botDataChannel = message.guild.channels.find(msg => msg.name == 'bot-data');
+            if (!botDataChannel) {
+                message.reply('Please use !setup first!');
+    
+            } else {
+                botDataChannel.fetchMessages()
+                .then(function(messages) {
+                    var data = {characterData: null, combatData: null};
+                    for (var botData of messages) {
+                        if (botData[1].content.startsWith('[Omni Tracker]')) {
+                            //Found the data.
+                            data.characterData = botData[1];
+                        } else if (botData[1].content.startsWith('[Combat]')) {
+                            data.combatData = botData[1];
+                        }
+                    }
+                    if (!data.characterData) {
+                        //No Omni Tracker data found. Create it!
+                        botDataChannel.send('[Omni Tracker]\nDATE,0')
+                        .then(function (newBotData) {
+                            data.characterData = newBotData;
+                            resolve(data);
+                        });
+                    } else {
+                        resolve(data);
+                    }
+                })
+            }
+        });
+    }
+
+    constructor (botData) {
         this.characters = {};
         this.time = new Date(0);
         this.combat = null;
+        this.characterDataMessage = botData.characterData;
+        this.combatDataMessage = null;
 
-        const PCregex = /PC,(?<name>.+),(?<owner><@\d+>),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
-        const effectRegex = /EFFECT,(?<name>.+),(?<effect>.+),(?<duration>\d+)/;
-        const enemyRegex = /ENEMY,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)/;
+        const PCregex = /^PC,(?<name>.+),(?<owner><@\d+>),(?<currentHP>\d+)?,(?<maxHP>\d+)?$/;
+        const effectRegex = /^EF,(?<name>.+),(?<effect>.+),(?<duration>\d+)$/;
+        const propRegex = /^PROP,(?<name>.+),(?<property>.+),(?<value>.+)$/;
+        const enemyRegex = /^ENEMY,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)$/;
         const dateRegex = /^DATE,(?<date>\d+)$/;
         const initRegex = /^INIT,(?<name>.+),(?<init>\d+)$/;
         const currentInitRegex = /^CURRENT_INIT,(?<currentTurn>.+)$/;
 
-        var lines = charData.content.split('\n');
+        this.characterDataMessage = botData.characterData;
+        this.combatDataMessage = botData.combatData;
+
+        var lines = this.characterDataMessage.content.split('\n');
         if (lines[0] != '[Omni Tracker]') {
             throw 'Invalid Bot Data. Expected Omni Tracker data.';
         }
@@ -90,15 +129,22 @@ class OmniTracker {
                     throw 'Bad data in Bot data! Expected PC, got ' + line;
                 }
                 parsed.groups.effects = {};
+                parsed.groups.properties = {};
                 parsed.groups.enemy = false;
                 parsed.groups.indent = ' '.repeat(parsed.groups.name.length + 1);
                 this.characters[parsed.groups.name] = parsed.groups;
-            } else if (line.startsWith('EFFECT')) {
+            } else if (line.startsWith('EF')) {
                 var parsed = line.match(effectRegex);
                 if (!parsed) {
                     throw 'Bad data in Bot data! Expected EFFECT, got ' + line;
                 }
                 this.characters[parsed.groups.name].effects[parsed.groups.effect] = parsed.groups;
+            } else if (line.startsWith('PROP')) {
+                var parsed = line.match(propRegex);
+                if (!parsed) {
+                    throw 'Bad data in Bot data! Expected PROP, got ' + line;
+                }
+                this.characters[parsed.groups.name].properties[parsed.groups.property] = parsed.groups;
             } else if (line.startsWith('DATE')) {
                 var parsed = line.match(dateRegex);
                 if (!parsed) {
@@ -108,9 +154,9 @@ class OmniTracker {
             }
         }
 
-        if (combatData) {
+        if (this.combatDataMessage) {
             this.combat = {};
-            var lines = combatData.content.split('\n');
+            var lines = this.combatDataMessage.content.split('\n');
             for (var line of lines) {
                 if (line.startsWith('ENEMY')) {
                     var parsed = line.match(enemyRegex);
@@ -118,6 +164,7 @@ class OmniTracker {
                         throw 'Bad data in Bot data! Expected GM, got ' + line;
                     }
                     parsed.groups.effects = {};
+                    parsed.groups.properties = {};
                     parsed.groups.enemy = true;
                     parsed.groups.indent = ' '.repeat(parsed.groups.name.length + 1);
                     this.characters[parsed.groups.name] = parsed.groups;
@@ -288,7 +335,7 @@ class OmniTracker {
 
     increaseTimeForCharacter(increaseInSeconds, character) {
         //Combat is weird in that while a round is 6 seconds, effects don't end at the end of the round, rather the start of the character turn.
-        //So we need to treat combat different, and only increase time for one character at start of their turn.
+        //So we need to treat combat different, and only increase time for one character at start of their turn when in combat.
         var expiredEffectsMessage = '';
         for (var effect of character.effects) {
             effect.duration =- increaseInSeconds;
@@ -296,16 +343,64 @@ class OmniTracker {
                 expiredEffectsMessage =+ `${effect.effect} has ended on ${effect.name}.\n`;
             }
         }
+        this.saveBotData();
+        //TODO: this.updateTrackers();
         return expiredEffectsMessage;
     }
 
     increaseTime(increaseInSeconds) {
         var expiredEffectsMessage = '';
-        //May want to make this its own function some day to reduce channel spam of effects all wearing off at the same time.
+        //There's a lot of duplicate code between this and the increaseTimeForChar function that's only used during combat.
+        //I did this to increase performance and reduce edit/message spam the bot sends to the discord server.
         for (var character of this.characters) {
             expiredEffectsMessage =+ this.increaseTimeForCharacter(increaseInSeconds, character);
         }
         return expiredEffectsMessage;
+    }
+
+    saveBotData() {
+        //Saves the data to the bot channel
+        var characterData = `[Omni Tracker]\nDATE,${this.time.getTime()}\n`;
+        for (var character in this.characters) {
+            var char = this.characters[character];
+            if (char.enemy)
+                continue;
+            characterData += `PC,${char.name},${char.owner}\n`;
+            for (var effectName of Object.keys(char.effects)) {
+                var effect = char.effects[effectName];
+                characterData += `EF,${effect.name},${effect.effect},${effect.duration}\n`;
+            }
+            for (var propertyName of Object.keys(char.properties)) {
+                var property = char.properties[propertyName];
+                characterData += `PROP,${property.name},${property.property},${property.value}\n`;
+            }
+        }
+        this.characterDataMessage.edit(characterData)
+        .catch(console.error);
+
+        if (this.combat) {
+            var combatData = `[Combat]\nCURRENT_INIT,${this.combat.currentTurn}\n`;
+            for (var character in this.characters) {
+                var char = this.characters[character];
+                if (!char.enemy) {
+                    combatData += `INIT,${char.name},${char.init}\n`;
+                    continue;
+                }
+                combatData += `ENEMY,${char.name},${char.owner}\n`;
+                for (var effectName of Object.keys(char.effects)) {
+                    var effect = char.effects[effectName];
+                    combatData += `EF,${effect.name},${effect.effect},${effect.duration}\n`;
+                }
+                for (var propertyName of Object.keys(char.properties)) {
+                    var property = char.properties[propertyName];
+                    combatData += `PROP,${property.name},${property.property},${property.value}\n`;
+                }
+                combatData += `INIT,${char.name},${char.init}\n`;
+            }
+            this.combatDataMessage.edit(combatData)
+            .catch(console.error);
+        }
+
     }
 
     generateMessageText() {
@@ -321,7 +416,7 @@ class OmniTracker {
         }
 
         for (var character in characters) {
-            var foo = this.characters[characters[character]];       //ugh
+            var foo = this.characters[characters[character]];       //ugh, again
             if (this.combat) {
                 if (this.combat.currentTurn == foo.name) {
                     output += `> ${foo.init} | `;
@@ -351,6 +446,7 @@ const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(
 function handleCommand(message) {
     
     if (message.content.startsWith('!omni help')) {
+        //Handle help first since it doesn't follow the normal verb-noun-target syntax
         message.author.send(helpMessage)
         .then(function() {
             message.author.send(gmHelpMessage);
@@ -365,45 +461,14 @@ function handleCommand(message) {
     }
 
     switch (command.groups.noun) {
+        case 'player':
+            managePlayer(command, message);
+            break;
         case 'tracker':
             manageTracker(command, message);
             break;
     }
 
-}
-
-function getBotDataMessages(message) {
-    return new Promise(function(resolve, reject) {
-        //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
-        botDataChannel = message.guild.channels.find(msg => msg.name == 'bot-data');
-        if (!botDataChannel) {
-            message.reply('Please use !setup first!');
-
-        } else {
-            botDataChannel.fetchMessages()
-            .then(function(messages) {
-                var data = {botData: null, combatData: null};
-                for (botData of messages) {
-                    if (botData[1].content.startsWith('[Omni Tracker]')) {
-                        //Found the data.
-                        data.botData = botData[1];
-                    } else if (botData[1].content.startsWith('[Combat]')) {
-                        data.combatData = botData[1];
-                    }
-                }
-                if (!data.botData) {
-                    //No Omni Tracker data found. Create it!
-                    botDataChannel.send('[Omni Tracker]\nDATE,0')
-                    .then(function (newBotData) {
-                        data.botData = newBotData;
-                        resolve(data);
-                    });
-                } else {
-                    resolve(data);
-                }
-            })
-        }
-    });
 }
 
 function manageTracker(command, message) {
@@ -423,11 +488,11 @@ function manageTracker(command, message) {
             break;
     
         case 'add':
-            getBotDataMessages(message)
+            OmniTracker.getBotDataMessages(message)
             .then(function(data){
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
-                omniTracker = new OmniTracker(data.botData, data.combatData);
+                omniTracker = new OmniTracker(data);
                 return message.channel.send(omniTracker.generateMessageText());
             })
             .then(function(newMessage) {
@@ -436,8 +501,21 @@ function manageTracker(command, message) {
             .catch(console.error);    
             break;
         default:
-            message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun}`)
+            message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
             .catch(console.error);
     }
 }
 
+function managePlayer(command, message) {
+    switch (command.groups.verb) {
+        case 'remove':
+            OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+                delete tracker.characters[command.groups.target];
+                tracker.saveBotData();
+                tracker.updateTrackers();
+            })
+
+    }
+}
