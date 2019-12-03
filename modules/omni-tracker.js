@@ -14,7 +14,7 @@ Aliases:
 !omni add tracker here players                  (Create an omni tracker for players in this channel.)
 !omni add player Bob AC:10                      (Add a new player Bob controlled by the person who typed the command.)
 !omni remove player Bob                         (Add a new player Bob controlled by the person who typed the command.)
-!omni set player Bob AC:20 HP:15                (Set Bob's AC to 20 and current HP to 15.)
+!omni set player Bob AC:20 HP:15/30             (Set Bob's AC to 20 and current HP to 15 of 30.)
 !omni damage player Bob 5
 !omni heal player Bob 5                         (Heal Bob for 5 HP.)
 !omni add effect Bob dizzy 5 rounds             (Make Bob dizzy for 5 rounds.)
@@ -441,7 +441,7 @@ class OmniTracker {
     }
 }
 
-const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<options>.*)?$/;
+const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
 
 function handleCommand(message) {
     
@@ -516,6 +516,23 @@ function managePlayer(command, message) {
                 tracker.saveBotData();
                 tracker.updateTrackers();
             })
+            break;
+        case 'add':
+            OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+                var characterName = command.groups.target.replace("'","").replace(',','');
+                const propertiesRegex = /(?<propertyName>\w+):(?<propertyValue>\w+)/;
+                tracker.characters[characterName] = {name: characterName, owner: message.author.tag, effects: {}, properties: {}, enemy: false, indent: ' '.repeat(characterName.length + 1)};
+
+                var properties = command.groups.properties.matchAll(propertiesRegex);
+                for (property of properties) {
+                    tracker.characters[characterName].properties[property.groups.propertyName] = {name:characterName, property: property.propertyName, value: property.propertyValue};
+                }
+                tracker.saveBotData();
+                tracker.updateTrackers();
+            })
+            break;
 
     }
 }
