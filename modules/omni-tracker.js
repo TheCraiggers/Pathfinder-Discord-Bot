@@ -2,11 +2,11 @@ var helpMessage = `
 \`\`\`
 Most commands follow the '!omni <verb> <noun> <target> <properties>' pattern
 Verbs: add, set, remove
-Nouns: tracker, player, effect, enemy, time, shield, property
+Nouns: tracker, player, effect, enemy, time, shield, property, shield, pet, familiar
 Targets: names of players or enemies (quotes required if there are spaces), !players, !enemies, !everybody, !everyone
 Properties: used for setting durations, hit points, etc. AC, HP, etc.
 
-Some commands are typed so often I provided shorter aliases for them. This doesn't mean the longer version doesn't work though!
+Some commands are typed often so shorter aliases are provided for them. This doesn't mean the longer version doesn't work though!
 
 Aliases:
 
@@ -53,13 +53,86 @@ class omniPlugin {
         });
         client.on('messageUpdate', (oldMessage, newMessage) => {
             if (newMessage.content.startsWith('!omni')) {
-                handleCommand(message);
+                handleCommand(newMessage);
             }   
         });
         console.log('Successfully loaded Omni Tracker plugin.');
     }
 }
 module.exports = (client) => { return new omniPlugin(client) }
+
+class PropertyRange {
+    constructor(name, currentValue, maxValue) {
+        this.name = name;
+        this.currentValue = currentValue;
+        this.maxValue = maxValue;
+    }
+    
+    toString = function() {
+        return `${this.name}:${this.currentValue}/${this.maxValue}`;
+    }
+}
+
+class Property {
+    constructor(name, currentValue) {
+        this.name = name;
+        this.currentValue = currentValue;
+    }
+    
+    toString = function() {
+        return `${this.name}:${this.currentValue}`;
+    }
+}
+
+class Character {
+    constructor(name, owner, currentHP, maxHP) {
+        this.name = name;
+        this.owner = owner;
+        this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later
+        this.indent = ' '.repeat(name.length + 1);
+        this.effects = {};
+        this.properties = {};
+        this.linkedCharacters = {};     //Pets, familiars, shields, etc
+    }
+
+    setHealth(currentHP, maxHP) {
+
+        this.HP.currentValue = currentHP;
+        if (maxHP !== undefined)
+            this.HP.maxValue = maxHP;
+        return this;
+    }
+
+    setProperty(propertyName, value) {
+        if (propertyName.toUpperCase() == 'HP')
+            this.setHealth(value);
+        else 
+            this.properties[propertyName] = new Property(propertyName, value);
+        return this;
+    }
+
+    setPropertyRange(propertyName, currentValue, maxValue) {
+        if (propertyName.toUpperCase() == 'HP')
+            this.setHealth(currentValue,maxValue);
+        else 
+            this.properties[propertyName] = new PropertyRange(propertyName, currentValue, maxValue);
+        return this;
+    }
+}
+
+class Player extends Character {
+    constructor(name,owner,currentHP,maxHP) {
+        super(name, owner, currentHP,maxHP);
+        this.enemy = false;
+    }
+}
+
+class Enemy extends Character {
+    constructor(name,owner,currentHP,maxHP) {
+        super(name, owner, currentHP,maxHP);
+        this.enemy = true;
+    }
+}
 
 class OmniTracker {
     static getBotDataMessages(message) {
@@ -74,7 +147,7 @@ class OmniTracker {
                 .then(function(messages) {
                     var data = {characterData: null, combatData: null};
                     for (var botData of messages) {
-                        if (botData[1].content.startsWith('[Omni Tracker]')) {
+                        if (botData[1].content.startsWith('[Character]')) {
                             //Found the data.
                             data.characterData = botData[1];
                         } else if (botData[1].content.startsWith('[Combat]')) {
@@ -83,7 +156,7 @@ class OmniTracker {
                     }
                     if (!data.characterData) {
                         //No Omni Tracker data found. Create it!
-                        botDataChannel.send('[Omni Tracker]\nDATE,0')
+                        botDataChannel.send('[Character]\nDATE,0')
                         .then(function (newBotData) {
                             data.characterData = newBotData;
                             resolve(data);
@@ -103,7 +176,7 @@ class OmniTracker {
         this.characterDataMessage = botData.characterData;
         this.combatDataMessage = null;
 
-        const PCregex = /^PC,(?<name>.+),(?<owner><@\d+>),(?<currentHP>\d+)?,(?<maxHP>\d+)?$/;
+        const PCregex = /^PC,(?<name>.+),(?<owner>(<@\d+>|.+#\d+)),(?<currentHP>\d+)?,(?<maxHP>\d+)?$/;
         const effectRegex = /^EF,(?<name>.+),(?<effect>.+),(?<duration>\d+)$/;
         const propRegex = /^PROP,(?<name>.+),(?<property>.+),(?<value>.+)$/;
         const enemyRegex = /^ENEMY,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)$/;
@@ -115,12 +188,9 @@ class OmniTracker {
         this.combatDataMessage = botData.combatData;
 
         var lines = this.characterDataMessage.content.split('\n');
-        if (lines[0] != '[Omni Tracker]') {
-            throw 'Invalid Bot Data. Expected Omni Tracker data.';
-        }
 
         for (var line of lines) {
-            if (line == '[Omni Tracker]') {
+            if (line == '[Character]') {
                 continue;
             }
             else if (line.startsWith('PC')) {
@@ -128,11 +198,7 @@ class OmniTracker {
                 if (!parsed) {
                     throw 'Bad data in Bot data! Expected PC, got ' + line;
                 }
-                parsed.groups.effects = {};
-                parsed.groups.properties = {};
-                parsed.groups.enemy = false;
-                parsed.groups.indent = ' '.repeat(parsed.groups.name.length + 1);
-                this.characters[parsed.groups.name] = parsed.groups;
+                this.characters[parsed.groups.name] = new Player(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP);
             } else if (line.startsWith('EF')) {
                 var parsed = line.match(effectRegex);
                 if (!parsed) {
@@ -144,7 +210,7 @@ class OmniTracker {
                 if (!parsed) {
                     throw 'Bad data in Bot data! Expected PROP, got ' + line;
                 }
-                this.characters[parsed.groups.name].properties[parsed.groups.property] = parsed.groups;
+                this.characters[parsed.groups.name].properties[parsed.groups.property] = new Property(parsed.groups.property,parsed.groups.value);
             } else if (line.startsWith('DATE')) {
                 var parsed = line.match(dateRegex);
                 if (!parsed) {
@@ -163,11 +229,7 @@ class OmniTracker {
                     if (!parsed) {
                         throw 'Bad data in Bot data! Expected GM, got ' + line;
                     }
-                    parsed.groups.effects = {};
-                    parsed.groups.properties = {};
-                    parsed.groups.enemy = true;
-                    parsed.groups.indent = ' '.repeat(parsed.groups.name.length + 1);
-                    this.characters[parsed.groups.name] = parsed.groups;
+                    this.characters[parsed.groups.name] = new Enemy(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP);
                 } else if (line.startsWith('EFFECT')) {
                     var parsed = line.match(effectRegex);
                     if (!parsed) {
@@ -275,7 +337,7 @@ class OmniTracker {
             hourName = 'Dusk';
         } else if (20 <  hourNumber && hourNumber < 24 ) {
             hourName = 'Night';
-        } else if (0 <  hourNumber && hourNumber < 6 ) {
+        } else if (hourNumber < 6 ) {
             hourName = 'Night';
         } else if (6 <  hourNumber && hourNumber < 7 ) {
             hourName = 'Dawn';
@@ -286,10 +348,10 @@ class OmniTracker {
         return `{${dayName}, ${this.time.getUTCDate()} ${monthName}; ${hourName}}`;
     }
 
-    getAmbiguousHP(currentHP, maxHP) {
-        var percentage = currentHP/maxHP;
+    getAmbiguousHP() {
+        var percentage = this.HP.currentValue/this.HP.maxValue;
         if (percentage < .15) {
-            return 'Bloodied';
+            return 'Critical';
         } else if (percentage < .5) {
             return 'Bloodied';
         } else if (percentage < 1) {
@@ -360,19 +422,19 @@ class OmniTracker {
 
     saveBotData() {
         //Saves the data to the bot channel
-        var characterData = `[Omni Tracker]\nDATE,${this.time.getTime()}\n`;
+        var characterData = `[Character]\nDATE,${this.time.getTime()}\n`;
         for (var character in this.characters) {
             var char = this.characters[character];
             if (char.enemy)
                 continue;
-            characterData += `PC,${char.name},${char.owner}\n`;
+            characterData += `PC,${char.name},${char.owner},${char.HP.currentValue},${char.HP.maxValue}\n`;
             for (var effectName of Object.keys(char.effects)) {
                 var effect = char.effects[effectName];
                 characterData += `EF,${effect.name},${effect.effect},${effect.duration}\n`;
             }
             for (var propertyName of Object.keys(char.properties)) {
                 var property = char.properties[propertyName];
-                characterData += `PROP,${property.name},${property.property},${property.value}\n`;
+                characterData += `PROP,${char.name},${property.name},${property.currentValue}\n`;
             }
         }
         this.characterDataMessage.edit(characterData)
@@ -393,7 +455,7 @@ class OmniTracker {
                 }
                 for (var propertyName of Object.keys(char.properties)) {
                     var property = char.properties[propertyName];
-                    combatData += `PROP,${property.name},${property.property},${property.value}\n`;
+                    combatData += `PROP,${char.name},${property.propertyName},${property.currentValue}\n`;
                 }
                 combatData += `INIT,${char.name},${char.init}\n`;
             }
@@ -401,6 +463,25 @@ class OmniTracker {
             .catch(console.error);
         }
 
+    }
+
+    updateTrackers() {
+        //Search all channels in this guild for Omni Trackers and update them.
+        var updatedTracker = this.generateMessageText();
+        for (var channel of this.characterDataMessage.guild.channels) {
+            if (channel[1].type == 'text') {
+                channel[1].fetchPinnedMessages()
+                .then(messages => {
+                    for (var msg of messages) {
+                        if (msg[1].content.startsWith('```CSS\n[Omni Tracker]')) {
+                            msg[1].edit(updatedTracker)
+                            .catch(console.error);
+                        }
+                    }
+                })
+                .catch(console.error)
+            }
+        }
     }
 
     generateMessageText() {
@@ -425,11 +506,17 @@ class OmniTracker {
                 }
             }
             if (foo.enemy) {
-                output += `${foo.name}: <${this.getAmbiguousHP(foo.currentHP, foo.maxHP)}>\n`;
+                output += `${foo.name}: <${this.getAmbiguousHP()}>\n`;
             } else {
-                output += `${foo.name}: ${foo.currentHP}/${foo.maxHP} AC:${foo.AC}\n`;
+                output += `${foo.name}: ${foo.HP.currentValue}/${foo.HP.maxValue}`;
             }
 
+            for (var property of Object.keys(foo.properties)) {
+                var prop = foo.properties[property];
+                output += ` ${prop.toString()}`;
+            }
+            
+            output += '\n';
             for (var effect of Object.keys(foo.effects)) {
                 var bar = foo.effects[effect];
                 output += `${combatIndent}${foo.indent} ${bar.effect} ${[this.getDurationText(bar.duration)]}\n`;
@@ -441,8 +528,15 @@ class OmniTracker {
     }
 }
 
-const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
+function gmOnlyCommand(message) {
+    //Called when a command is deemed dangerous and we want to limit its usage to users with the GM role only.
+    //return true;
+    return new Promise(function(resolve, reject) {
+        throw "You're not a GM. Go away."
+    });
+}
 
+const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
 function handleCommand(message) {
     
     if (message.content.startsWith('!omni help')) {
@@ -457,7 +551,9 @@ function handleCommand(message) {
     
     var command = message.content.match(commandRegex);
     if (!command) {
-        message.reply('Invalid !omni command. Use !omni help if needed.');
+        message.reply('Invalid !omni command. Use !omni help if needed.')
+        .catch(console.error);
+        return;
     }
 
     switch (command.groups.noun) {
@@ -474,6 +570,7 @@ function handleCommand(message) {
 function manageTracker(command, message) {
     switch (command.groups.verb) {
         case 'remove':
+            gmOnlyCommand(message);
             message.channel.fetchPinnedMessages()
             .then(function(pinnedMessages) {
                 for (var pinnedMessage of pinnedMessages) {
@@ -488,6 +585,7 @@ function manageTracker(command, message) {
             break;
     
         case 'add':
+            gmOnlyCommand(message);
             OmniTracker.getBotDataMessages(message)
             .then(function(data){
                 //Using the data, we can now construct an Omni Tracker class object and use it to
@@ -509,12 +607,19 @@ function manageTracker(command, message) {
 function managePlayer(command, message) {
     switch (command.groups.verb) {
         case 'remove':
-            OmniTracker.getBotDataMessages(message)
+            gmOnlyCommand(message)
+            .then(function() {
+                OmniTracker.getBotDataMessages(message)    
+            })
             .then(data => {
                 var tracker = new OmniTracker(data);
                 delete tracker.characters[command.groups.target];
                 tracker.saveBotData();
                 tracker.updateTrackers();
+            })
+            .catch(error => {
+                message.reply(error);
+                console.error(error);
             })
             break;
         case 'add':
@@ -522,16 +627,20 @@ function managePlayer(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace("'","").replace(',','');
-                const propertiesRegex = /(?<propertyName>\w+):(?<propertyValue>\w+)/;
-                tracker.characters[characterName] = {name: characterName, owner: message.author.tag, effects: {}, properties: {}, enemy: false, indent: ' '.repeat(characterName.length + 1)};
+                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
+                tracker.characters[characterName] = new Player(characterName, message.author.tag, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
 
                 var properties = command.groups.properties.matchAll(propertiesRegex);
                 for (property of properties) {
-                    tracker.characters[characterName].properties[property.groups.propertyName] = {name:characterName, property: property.propertyName, value: property.propertyValue};
+                    if (property.groups.propertyValue)
+                        tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
+                    else
+                        tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
                 }
                 tracker.saveBotData();
                 tracker.updateTrackers();
             })
+            .catch(error => message.reply(error));
             break;
 
     }
