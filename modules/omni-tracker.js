@@ -2,13 +2,15 @@ var helpMessage = `
 \`\`\`
 Most commands follow the '!omni <verb> <noun> <target> <properties>' pattern
 Verbs: add, set, remove
-Nouns: tracker, player, effect, enemy, time, shield, property, shield, pet, familiar
+Nouns: tracker, player, effect, enemy, time, shield, property, shield, pet, familiar, group
 Targets: names of players or enemies (quotes required if there are spaces), !players, !enemies, !everybody, !everyone
 Properties: used for setting durations, hit points, etc. AC, HP, etc.
 
 Some commands are typed often so shorter aliases are provided for them. This doesn't mean the longer version doesn't work though!
 
 Aliases:
+
+Examples:
 
 !omni help                                      (Displays this.)
 !omni add tracker here players                  (Create an omni tracker for players in this channel.)
@@ -41,6 +43,8 @@ GM Commands:
 !omni set init Bob 15                       (Change Bob's initiative to 15)
 !omni set init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !omni next                                  (When in combat, move to next character's turn)
+!omni add group 'Team Bravo'
+!omni add Bob 'Team Bravo'
 \`\`\`
 `;
 
@@ -532,7 +536,8 @@ function gmOnlyCommand(message) {
     //Called when a command is deemed dangerous and we want to limit its usage to users with the GM role only.
     //return true;
     return new Promise(function(resolve, reject) {
-        throw "You're not a GM. Go away."
+        //throw "You're not a GM. Go away."
+        resolve();
     });
 }
 
@@ -642,6 +647,32 @@ function managePlayer(command, message) {
             })
             .catch(error => message.reply(error));
             break;
-
+        case 'set':
+            OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+                var characterName = command.groups.target.replace("'","");
+                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
+                if (tracker.characters[characterName]) {
+                    var properties = command.groups.properties.matchAll(propertiesRegex);
+                    for (property of properties) {
+                        if (property.groups.propertyValue)
+                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
+                        else
+                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
+                    }
+                    tracker.saveBotData();
+                    tracker.updateTrackers();
+                } else {
+                    message.reply(`Player ${command.groups.target} could not be found.`)
+                    .catch(console.error);
+                }
+            })
+            .catch(error => message.reply(error));
+            break;
+        default:
+            message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
+            .catch(console.error);
     }
 }
+
