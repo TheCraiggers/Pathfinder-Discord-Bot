@@ -22,11 +22,10 @@ Examples:
 !omni add effect Bob dizzy 5 rounds             (Make Bob dizzy for 5 rounds.)
 !omni add effect Bob sick 2 days                (Makes Bob sick for 2 days.)
 !omni remove effect Bob Dizzy                   (Remove Dizzy from Bob prematurely)
-!omni add effect Inspiried !players 1 round     (Gives all PCs the Inspired effect)
-!omni add effect 'On Fire' !everyone 1 round    (Makes enemies and players on fire)
-!omni add effect Dumb !enemies 1 round          (Gives all enemies the dumb effect)
+!omni add effect %players Inspired 1 round      (Gives all PCs the Inspired effect)
+!omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
+!omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
 !omni add player Bob AC:1                       (Adds +1 to Bob's AC)
-
 \`\`\`
 `
 var gmHelpMessage = `
@@ -65,26 +64,26 @@ class omniPlugin {
 }
 module.exports = (client) => { return new omniPlugin(client) }
 
-class PropertyRange {
-    constructor(name, currentValue, maxValue) {
+class Property {
+    constructor(name, currentValue, isAboveFold) {
         this.name = name;
         this.currentValue = currentValue;
+        this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
+    }
+    
+    toString = function() {
+        return `${this.name}:${this.currentValue}`;
+    }
+}
+
+class PropertyRange extends Property {
+    constructor(name, currentValue, maxValue, isAboveFold) {
+        super(name, currentValue, isAboveFold);
         this.maxValue = maxValue;
     }
     
     toString = function() {
         return `${this.name}:${this.currentValue}/${this.maxValue}`;
-    }
-}
-
-class Property {
-    constructor(name, currentValue) {
-        this.name = name;
-        this.currentValue = currentValue;
-    }
-    
-    toString = function() {
-        return `${this.name}:${this.currentValue}`;
     }
 }
 
@@ -121,6 +120,43 @@ class Character {
         else 
             this.properties[propertyName] = new PropertyRange(propertyName, currentValue, maxValue);
         return this;
+    }
+
+    addEffect(effectName, durationString) {
+        var durationInSeconds = 0;
+        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/g;
+        const durations = durationString.matchAll(durationRegex);
+        for (const duration of durations) {
+            switch (duration.groups.durationUnits) {
+                case 'round':
+                    durationInSeconds =+ duration.groups.duration * 6;
+                    break;
+                case 'min':
+                case 'minute':
+                    durationInSeconds =+ duration.groups.duration * 60;
+                    break;
+                case 'hour':
+                    durationInSeconds =+ duration.groups.duration * 3600;
+                    break;
+                case 'day':
+                    durationInSeconds =+ duration.groups.duration * 86400;
+                    break;
+                case 'week':
+                    durationInSeconds =+ duration.groups.duration * 604800;
+                    break;
+                default:
+                    console.error("Somehow got an invalid durationUnit past regex!");
+            }
+        }
+        if (durationInSeconds == 0)
+            durationInSeconds = Infinity;       //This means no duration was set, so it'll last until removed.
+
+        if (this.effects[effectName]) {
+            //Effect already exists. Compare durations. Highest duration stays
+            this.effects[effectName].duration = Math.max(this.effects[effectName].duration, durationInSeconds);
+        } else {
+            this.effects[effectName] = {duration: durationInSeconds};
+        }
     }
 }
 
@@ -432,9 +468,9 @@ class OmniTracker {
             if (char.enemy)
                 continue;
             characterData += `PC,${char.name},${char.owner},${char.HP.currentValue},${char.HP.maxValue}\n`;
-            for (var effectName of Object.keys(char.effects)) {
-                var effect = char.effects[effectName];
-                characterData += `EF,${effect.name},${effect.effect},${effect.duration}\n`;
+            for (const effectName of Object.keys(char.effects)) {
+                const effect = char.effects[effectName];
+                characterData += `EF,${char.name},${effectName},${effect.duration}\n`;
             }
             for (var propertyName of Object.keys(char.properties)) {
                 var property = char.properties[propertyName];
@@ -515,15 +551,16 @@ class OmniTracker {
                 output += `${foo.name}: ${foo.HP.currentValue}/${foo.HP.maxValue}`;
             }
 
-            for (var property of Object.keys(foo.properties)) {
-                var prop = foo.properties[property];
-                output += ` ${prop.toString()}`;
+            for (var propertyName of Object.keys(foo.properties)) {
+                var property = foo.properties[propertyName];
+                if (property.isAboveFold)
+                    output += ` ${property.toString()}`;
             }
             
             output += '\n';
-            for (var effect of Object.keys(foo.effects)) {
-                var bar = foo.effects[effect];
-                output += `${combatIndent}${foo.indent} ${bar.effect} ${[this.getDurationText(bar.duration)]}\n`;
+            for (var effectName of Object.keys(foo.effects)) {
+                var effect = foo.effects[effectName];
+                output += `${combatIndent}${foo.indent} ${effectName} ${[this.getDurationText(effect.duration)]}\n`;
             }
             
         }
@@ -567,6 +604,9 @@ function handleCommand(message) {
             break;
         case 'tracker':
             manageTracker(command, message);
+            break;
+        case 'effect':
+            manageEffects(command, message);
             break;
     }
 
@@ -676,3 +716,31 @@ function managePlayer(command, message) {
     }
 }
 
+function manageEffects(command, message) {
+    switch (command.groups.verb) {
+        case 'add':
+            OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+                var characterName = command.groups.target.replace("'","");
+                const effectRegex = /^(?<effectName>('.+?'|\w+))(?<durationInfo>.*)$/i;
+
+                effect = command.groups.properties.match(effectRegex);
+                if (effect) {
+                    tracker.characters[characterName].addEffect(effect.groups.effectName, effect.groups.durationInfo);
+                    tracker.saveBotData();
+                    tracker.updateTrackers();
+                } else {
+                    message.reply('Invalid effect command.')
+                    .catch(console.error);
+                }
+            })
+            .catch(console.error);
+            break;
+
+        default:
+                message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
+                .catch(console.error);
+
+    }
+}
