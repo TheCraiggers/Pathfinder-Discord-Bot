@@ -88,7 +88,7 @@ class PropertyRange extends Property {
 }
 
 class Character {
-    constructor(name, owner, currentHP, maxHP) {
+    constructor(name, owner, currentHP, maxHP, dataMessage) {
         this.name = name;
         this.owner = owner;
         this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later
@@ -96,6 +96,7 @@ class Character {
         this.effects = {};
         this.properties = {};
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
+        this.dataMessage = dataMessage; 
     }
 
     setHealth(currentHP, maxHP) {
@@ -161,15 +162,15 @@ class Character {
 }
 
 class Player extends Character {
-    constructor(name,owner,currentHP,maxHP) {
-        super(name, owner, currentHP,maxHP);
+    constructor(name,owner,currentHP,maxHP, dataMessage) {
+        super(name, owner, currentHP,maxHP, dataMessage);
         this.enemy = false;
     }
 }
 
 class Enemy extends Character {
-    constructor(name,owner,currentHP,maxHP) {
-        super(name, owner, currentHP,maxHP);
+    constructor(name,owner,currentHP,maxHP,dataMessage) {
+        super(name, owner, currentHP,maxHP,dataMessage);
         this.enemy = true;
     }
 }
@@ -185,20 +186,25 @@ class OmniTracker {
             } else {
                 botDataChannel.fetchMessages()
                 .then(function(messages) {
-                    var data = {characterData: null, combatData: null};
-                    for (var botData of messages) {
-                        if (botData[1].content.startsWith('[Character]')) {
-                            //Found the data.
-                            data.characterData = botData[1];
-                        } else if (botData[1].content.startsWith('[Combat]')) {
-                            data.combatData = botData[1];
+                    var data = {omniData: null, characterData: [], combatData: null};
+                    for (const botData of messages) {
+                        switch (botData[1].content.split('\n')[0]) {        //Switch on first line of the message
+                            case '[Omni Tracker]':
+                                data.omniData = botData[1];    
+                                break;
+                            case '[Character]':
+                                data.characterData.push(botData[1]);
+                                break;
+                            case '[Combat]':
+                                data.combatData = botData[1];
+                                break;    
                         }
                     }
-                    if (!data.characterData) {
+                    if (!data.omniData) {
                         //No Omni Tracker data found. Create it!
-                        botDataChannel.send('[Character]\nDATE,0')
+                        botDataChannel.send('[Omni Tracker]\nDATE,0')
                         .then(function (newBotData) {
-                            data.characterData = newBotData;
+                            data.omniData = newBotData;
                             resolve(data);
                         });
                     } else {
@@ -213,8 +219,8 @@ class OmniTracker {
         this.characters = {};
         this.time = new Date(0);
         this.combat = null;
-        this.characterDataMessage = botData.characterData;
-        this.combatDataMessage = null;
+        this.omniDataMessage = botData.omniData;
+        this.combatDataMessage = botData.combatData;
 
         const PCregex = /^PC,(?<name>.+),(?<owner>(<@\d+>|.+#\d+)),(?<currentHP>\d+)?,(?<maxHP>\d+)?$/;
         const effectRegex = /^EF,(?<name>.+),(?<effect>.+),(?<duration>\d+)$/;
@@ -224,58 +230,47 @@ class OmniTracker {
         const initRegex = /^INIT,(?<name>.+),(?<init>\d+)$/;
         const currentInitRegex = /^CURRENT_INIT,(?<currentTurn>.+)$/;
 
-        this.characterDataMessage = botData.characterData;
-        this.combatDataMessage = botData.combatData;
+        var messages = botData.characterData;
+        messages.push(this.omniDataMessage);
+        if (this.combatDataMessage)
+            messages.push(this.combatDataMessage);
 
-        var lines = this.characterDataMessage.content.split('\n');
+        for (const message of messages) {
+            var lines = message.content.split('\n');
 
-        for (var line of lines) {
-            if (line == '[Character]') {
-                continue;
-            }
-            else if (line.startsWith('PC')) {
-                var parsed = line.match(PCregex);
-                if (!parsed) {
-                    throw 'Bad data in Bot data! Expected PC, got ' + line;
-                }
-                this.characters[parsed.groups.name] = new Player(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP);
-            } else if (line.startsWith('EF')) {
-                var parsed = line.match(effectRegex);
-                if (!parsed) {
-                    throw 'Bad data in Bot data! Expected EFFECT, got ' + line;
-                }
-                this.characters[parsed.groups.name].effects[parsed.groups.effect] = parsed.groups;
-            } else if (line.startsWith('PROP')) {
-                var parsed = line.match(propRegex);
-                if (!parsed) {
-                    throw 'Bad data in Bot data! Expected PROP, got ' + line;
-                }
-                this.characters[parsed.groups.name].properties[parsed.groups.property] = new Property(parsed.groups.property,parsed.groups.value);
-            } else if (line.startsWith('DATE')) {
-                var parsed = line.match(dateRegex);
-                if (!parsed) {
-                    throw 'Bad data in Bot data! Expected DATE, got ' + line;
-                }
-                this.time = new Date(parsed.groups.date*1);
-            }
-        }
-
-        if (this.combatDataMessage) {
-            this.combat = {};
-            var lines = this.combatDataMessage.content.split('\n');
             for (var line of lines) {
-                if (line.startsWith('ENEMY')) {
-                    var parsed = line.match(enemyRegex);
+                if (line.startsWith('PC')) {
+                    var parsed = line.match(PCregex);
                     if (!parsed) {
-                        throw 'Bad data in Bot data! Expected GM, got ' + line;
+                        throw 'Bad data in Bot data! Expected PC, got ' + line;
                     }
-                    this.characters[parsed.groups.name] = new Enemy(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP);
-                } else if (line.startsWith('EFFECT')) {
+                    this.characters[parsed.groups.name] = new Player(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP,message);
+                } else if (line.startsWith('EF')) {
                     var parsed = line.match(effectRegex);
                     if (!parsed) {
                         throw 'Bad data in Bot data! Expected EFFECT, got ' + line;
                     }
                     this.characters[parsed.groups.name].effects[parsed.groups.effect] = parsed.groups;
+                } else if (line.startsWith('PROP')) {
+                    var parsed = line.match(propRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected PROP, got ' + line;
+                    }
+                    this.characters[parsed.groups.name].properties[parsed.groups.property] = new Property(parsed.groups.property,parsed.groups.value);
+                } else if (line.startsWith('DATE')) {
+                    var parsed = line.match(dateRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected DATE, got ' + line;
+                    }
+                    this.time = new Date(parsed.groups.date*1);
+                } else if (line.startsWith('[Combat')) {
+                    this.combat = {};
+                } else if (line.startsWith('ENEMY')) {
+                    var parsed = line.match(enemyRegex);
+                    if (!parsed) {
+                        throw 'Bad data in Bot data! Expected GM, got ' + line;
+                    }
+                    this.characters[parsed.groups.name] = new Enemy(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP, message);
                 } else if (line.startsWith('INIT')) {
                     var parsed = line.match(initRegex);
                     if (!parsed) {
@@ -462,41 +457,46 @@ class OmniTracker {
 
     saveBotData() {
         //Saves the data to the bot channel
-        var characterData = `[Character]\nDATE,${this.time.getTime()}\n`;
-        for (var character in this.characters) {
-            var char = this.characters[character];
-            if (char.enemy)
-                continue;
-            characterData += `PC,${char.name},${char.owner},${char.HP.currentValue},${char.HP.maxValue}\n`;
-            for (const effectName of Object.keys(char.effects)) {
-                const effect = char.effects[effectName];
-                characterData += `EF,${char.name},${effectName},${effect.duration}\n`;
+        var omniData = `[Omni Tracker]\nDATE,${this.time.getTime()}\n`;
+        this.omniDataMessage.edit(omniData)
+        .catch(console.error);
+
+        for (var characterName in this.characters) {
+            const character = this.characters[characterName];
+            var characterData = '[Character]\n';
+            if (character.enemy)
+                characterData += 'ENEMY,';
+            else
+                characterData += 'PC,';
+            
+            characterData += `${character.name},${character.owner},${character.HP.currentValue},${character.HP.maxValue}\n`;
+            for (const effectName of Object.keys(character.effects)) {
+                const effect = character.effects[effectName];
+                characterData += `EF,${character.name},${effectName},${effect.duration}\n`;
             }
-            for (var propertyName of Object.keys(char.properties)) {
-                var property = char.properties[propertyName];
-                characterData += `PROP,${char.name},${property.name},${property.currentValue}\n`;
+            for (var propertyName of Object.keys(character.properties)) {
+                var property = character.properties[propertyName];
+                characterData += `PROP,${character.name},${property.name},${property.currentValue}\n`;
+            }
+
+            if (!character.dataMessage) {
+                this.omniDataMessage.channel.send(characterData)
+                    .then(message => {
+                        character.dataMessage = message;
+                    })
+                    .catch(console.error);
+            
+            } else {
+                character.dataMessage.edit(characterData)
+                .catch(console.error);
             }
         }
-        this.characterDataMessage.edit(characterData)
-        .catch(console.error);
+        
 
         if (this.combat) {
             var combatData = `[Combat]\nCURRENT_INIT,${this.combat.currentTurn}\n`;
-            for (var character in this.characters) {
-                var char = this.characters[character];
-                if (!char.enemy) {
-                    combatData += `INIT,${char.name},${char.init}\n`;
-                    continue;
-                }
-                combatData += `ENEMY,${char.name},${char.owner}\n`;
-                for (var effectName of Object.keys(char.effects)) {
-                    var effect = char.effects[effectName];
-                    combatData += `EF,${effect.name},${effect.effect},${effect.duration}\n`;
-                }
-                for (var propertyName of Object.keys(char.properties)) {
-                    var property = char.properties[propertyName];
-                    combatData += `PROP,${char.name},${property.propertyName},${property.currentValue}\n`;
-                }
+            for (var characterName in this.characters) {
+                const char = this.characters[characterName];
                 combatData += `INIT,${char.name},${char.init}\n`;
             }
             this.combatDataMessage.edit(combatData)
@@ -508,7 +508,7 @@ class OmniTracker {
     updateTrackers() {
         //Search all channels in this guild for Omni Trackers and update them.
         var updatedTracker = this.generateMessageText();
-        for (var channel of this.characterDataMessage.guild.channels) {
+        for (var channel of this.omniDataMessage.guild.channels) {
             if (channel[1].type == 'text') {
                 channel[1].fetchPinnedMessages()
                 .then(messages => {
@@ -680,12 +680,16 @@ function managePlayer(command, message) {
                     if (property.groups.propertyValue)
                         tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
                     else
-                        tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
+                        tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
                 }
                 tracker.saveBotData();
                 tracker.updateTrackers();
             })
-            .catch(error => message.reply(error));
+            .catch(error => {
+                message.reply(`Sorry, there was an error. Check your syntax!
+                ${error}`);
+                console.error(error);
+            });
             break;
         case 'set':
             OmniTracker.getBotDataMessages(message)
