@@ -1,7 +1,7 @@
 var helpMessage = `
 \`\`\`
 Most commands follow the '!omni <verb> <noun> <target> <properties>' pattern
-Verbs: add, set, remove
+Verbs: add, set, remove, show
 Nouns: tracker, player, effect, enemy, time, shield, property, shield, pet, familiar, group
 Targets: names of players or enemies (quotes required if there are spaces), !players, !enemies, !everybody, !everyone
 Properties: used for setting durations, hit points, etc. AC, HP, etc.
@@ -640,6 +640,16 @@ function manageTracker(command, message) {
             })
             .then(function(newMessage) {
                 return newMessage.pin();
+            })
+            .catch(console.error);    
+            break;
+        case 'show':
+            OmniTracker.getBotDataMessages(message)
+            .then(function(data){
+                //Using the data, we can now construct an Omni Tracker class object and use it to
+                //create the message and pin it.
+                omniTracker = new OmniTracker(data);
+                return message.channel.send(omniTracker.generateMessageText());
             })
             .catch(console.error);    
             break;
