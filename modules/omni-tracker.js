@@ -108,7 +108,9 @@ class Character {
         //Effects
         var keys = Object.keys(character.effects);
         for (let i = 0; i < keys.length; i++) {
-            const effect = character.effects[keys[i]];
+            let effect = character.effects[keys[i]];
+            if (effect.duration == null)
+                effect.duration = Infinity;
             newCharacter.effects[keys[i]] = effect;
         }
 
@@ -384,7 +386,9 @@ class OmniTracker {
     }
 
     getDurationText(duration) {
-        if (duration >= 86400) {
+        if (duration === Infinity) {
+            return '';
+        } else if (duration >= 86400) {
             var foo = Math.round(duration/86400);
             return `${foo} day${(foo>1) ? 's':''}`;
         } else if (duration >= 3600) {
