@@ -88,6 +88,33 @@ class PropertyRange extends Property {
 }
 
 class Character {
+    static importJSON(character) {
+        if (character.enemy) {
+            var newCharacter = Enemy(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+        } else {
+            var newCharacter = new Player(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+        }
+
+        //Properties
+        var keys = Object.keys(character.properties);
+        for (let i = 0; i < keys.length; i++) {
+            const property = character.properties[keys[i]];
+            if (property.maxValue)
+                newCharacter.properties[property.name] = new PropertyRange(property.name, property.currentValue, property.maxValue, property.isAboveFold);
+            else
+                newCharacter.properties[property.name] = new Property(property.name, property.currentValue, property.isAboveFold);
+        }
+
+        //Effects
+        var keys = Object.keys(character.effects);
+        for (let i = 0; i < keys.length; i++) {
+            const effect = character.effects[keys[i]];
+            newCharacter.effects[keys[i]] = effect;
+        }
+
+        return newCharacter;
+    }
+
     constructor(name, owner, currentHP, maxHP, dataMessage) {
         this.name = name;
         this.owner = owner;
@@ -97,6 +124,13 @@ class Character {
         this.properties = {};
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
+    }
+
+    toJSON() {
+        let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
+        foo.type = 'Character';
+        foo.dataMessage = null;     //Discord message objects contain circular references that trip up JSON.stringify and we don't need to save all that garbage anyway.
+        return foo;
     }
 
     setHealth(currentHP, maxHP) {
@@ -186,29 +220,25 @@ class OmniTracker {
             } else {
                 botDataChannel.fetchMessages()
                 .then(function(messages) {
-                    var data = {omniData: null, characterData: [], combatData: null};
-                    for (const botData of messages) {
-                        switch (botData[1].content.split('\n')[0]) {        //Switch on first line of the message
-                            case '[Omni Tracker]':
-                                data.omniData = botData[1];    
-                                break;
-                            case '[Character]':
-                                data.characterData.push(botData[1]);
-                                break;
-                            case '[Combat]':
-                                data.combatData = botData[1];
-                                break;    
-                        }
+                    let botDatum = [];
+                    for (const msg of messages) {
+                        let data = JSON.parse(msg[1].content);
+                        data.message = msg[1];
+                        botDatum.push(data);
+                        if (data.type == 'OmniTracker')
+                            var omniData = true;
                     }
-                    if (!data.omniData) {
+                    if (!omniData) {
                         //No Omni Tracker data found. Create it!
-                        botDataChannel.send('[Omni Tracker]\nDATE,0')
-                        .then(function (newBotData) {
-                            data.omniData = newBotData;
-                            resolve(data);
+                        let newOmniObject = { type: 'OmniTracker', date: 0, combat: null };
+                        botDataChannel.send(JSON.stringify(newOmniObject))
+                        .then(function (newBotDataMessage) {
+                            newOmniObject.message = newBotDataMessage;
+                            botDatum.push(newOmniObject);
+                            resolve(botDatum);
                         });
                     } else {
-                        resolve(data);
+                        resolve(botDatum);
                     }
                 })
             }
@@ -222,70 +252,25 @@ class OmniTracker {
         this.omniDataMessage = botData.omniData;
         this.combatDataMessage = botData.combatData;
 
-        const PCregex = /^PC,(?<name>.+),(?<owner>(<@\d+>|.+#\d+)),(?<currentHP>\d+)?,(?<maxHP>\d+)?$/;
-        const effectRegex = /^EF,(?<name>.+),(?<effect>.+),(?<duration>\d+)$/;
-        const propRegex = /^PROP,(?<name>.+),(?<property>.+),(?<value>.+)$/;
-        const enemyRegex = /^ENEMY,(?<name>.+),(?<owner>@.+#\d+),(?<currentHP>\d+)?,(?<maxHP>\d+)?,(?<AC>\d+)$/;
-        const dateRegex = /^DATE,(?<date>\d+)$/;
-        const initRegex = /^INIT,(?<name>.+),(?<init>\d+)$/;
-        const currentInitRegex = /^CURRENT_INIT,(?<currentTurn>.+)$/;
-
-        var messages = botData.characterData;
-        messages.push(this.omniDataMessage);
-        if (this.combatDataMessage)
-            messages.push(this.combatDataMessage);
-
-        for (const message of messages) {
-            var lines = message.content.split('\n');
-
-            for (var line of lines) {
-                if (line.startsWith('PC')) {
-                    var parsed = line.match(PCregex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected PC, got ' + line;
-                    }
-                    this.characters[parsed.groups.name] = new Player(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP,message);
-                } else if (line.startsWith('EF')) {
-                    var parsed = line.match(effectRegex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected EFFECT, got ' + line;
-                    }
-                    this.characters[parsed.groups.name].effects[parsed.groups.effect] = parsed.groups;
-                } else if (line.startsWith('PROP')) {
-                    var parsed = line.match(propRegex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected PROP, got ' + line;
-                    }
-                    this.characters[parsed.groups.name].properties[parsed.groups.property] = new Property(parsed.groups.property,parsed.groups.value);
-                } else if (line.startsWith('DATE')) {
-                    var parsed = line.match(dateRegex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected DATE, got ' + line;
-                    }
-                    this.time = new Date(parsed.groups.date*1);
-                } else if (line.startsWith('[Combat')) {
-                    this.combat = {};
-                } else if (line.startsWith('ENEMY')) {
-                    var parsed = line.match(enemyRegex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected GM, got ' + line;
-                    }
-                    this.characters[parsed.groups.name] = new Enemy(parsed.groups.name, parsed.groups.owner, parsed.groups.currentHP, parsed.groups.maxHP, message);
-                } else if (line.startsWith('INIT')) {
-                    var parsed = line.match(initRegex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected INIT, got ' + line;
-                    }
-                    this.characters[parsed.groups.name].init = parsed.groups.init;
-                } else if (line.startsWith('CURRENT_INIT')) {
-                    var parsed = line.match(currentInitRegex);
-                    if (!parsed) {
-                        throw 'Bad data in Bot data! Expected CURRENT_INIT, got ' + line;
-                    }
-                    this.combat.currentTurn = parsed.groups.currentTurn;
-                }
+        for (const data of botData) {
+            switch (data.type) {
+                case 'Character':
+                    this.characters[data.name] = Character.importJSON(data);
+                    break;
+                case 'OmniTracker':
+                    this.date = new Date(data.date);
+                    this.omniDataMessage = data.message;
+                    break;
+                case 'Combat':
+                    this.combat = { currentTurn: data.currentTurn};
+                    this.combatDataMessage = data.message;
+                    break;
             }
         }
+    }
+
+    toJSON() {
+        return { type: 'OmniTracker', date: this.date, combat: this.combat };
     }
 
     getDateText() {
@@ -457,37 +442,22 @@ class OmniTracker {
 
     saveBotData() {
         //Saves the data to the bot channel
-        var omniData = `[Omni Tracker]\nDATE,${this.time.getTime()}\n`;
-        this.omniDataMessage.edit(omniData)
+        this.omniDataMessage.edit(JSON.stringify(this))
         .catch(console.error);
 
         for (var characterName in this.characters) {
             const character = this.characters[characterName];
-            var characterData = '[Character]\n';
-            if (character.enemy)
-                characterData += 'ENEMY,';
-            else
-                characterData += 'PC,';
-            
-            characterData += `${character.name},${character.owner},${character.HP.currentValue},${character.HP.maxValue}\n`;
-            for (const effectName of Object.keys(character.effects)) {
-                const effect = character.effects[effectName];
-                characterData += `EF,${character.name},${effectName},${effect.duration}\n`;
-            }
-            for (var propertyName of Object.keys(character.properties)) {
-                var property = character.properties[propertyName];
-                characterData += `PROP,${character.name},${property.name},${property.currentValue}\n`;
-            }
+            const json = JSON.stringify(character);
 
             if (!character.dataMessage) {
-                this.omniDataMessage.channel.send(characterData)
+                this.omniDataMessage.channel.send(json)
                     .then(message => {
                         character.dataMessage = message;
                     })
                     .catch(console.error);
             
             } else {
-                character.dataMessage.edit(characterData)
+                character.dataMessage.edit(json)
                 .catch(console.error);
             }
         }
@@ -685,19 +655,20 @@ function managePlayer(command, message) {
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
                 tracker.characters[characterName] = new Player(characterName, message.author.tag, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
 
-                var properties = command.groups.properties.matchAll(propertiesRegex);
-                for (property of properties) {
-                    if (property.groups.propertyValue)
-                        tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                    else
-                        tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                if (command.groups.properties) {
+                    var properties = command.groups.properties.matchAll(propertiesRegex);
+                    for (property of properties) {
+                        if (property.groups.propertyValue)
+                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
+                        else
+                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                    }
                 }
                 tracker.saveBotData();
                 tracker.updateTrackers();
             })
             .catch(error => {
-                message.reply(`Sorry, there was an error. Check your syntax!
-                ${error}`);
+                message.reply('Sorry, there was an error. Check your syntax!');
                 console.error(error);
             });
             break;
