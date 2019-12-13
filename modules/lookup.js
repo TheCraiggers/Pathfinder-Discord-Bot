@@ -82,6 +82,7 @@ function lookupTerm(message) {
                     })
                     .catch(err => {
                         console.log(err);
+                        disambiguousMessageMessage.delete().catch(console.error);
                         message.reply('Lookup cancelled.');
                     });
                 })
