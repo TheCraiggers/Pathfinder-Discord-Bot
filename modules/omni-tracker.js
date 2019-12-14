@@ -35,10 +35,10 @@ GM Commands:
 !omni add tracker here GM                   (Create a GM omni tracker in this channel. GM Trackers show more info than normal trackers, like enemy health.)
 !omni add enemy 8 Skeleton AC:12 HP:5       (Adds 8 Skeletons to combat- will be named 'Skeleton 1' through 'Skeleton 8')
 !omni add enemy 'War Boss' AC:40 HP:300
-!omni add time 10min                        (Moves time forward by 10 minutes)
-!omni add time 5 hours
-!omni set time tomorrow                     (Moves time forward until it's tomorrow morning)
-!omni set time 13:00                        (Moves time forward until it's 1pm)
+!omni add time tracker 10min                (Moves time forward by 10 minutes)
+!omni add time tracker 5 hours
+!omni set time tracker tomorrow             (Moves time forward until it's tomorrow morning)
+!omni set time tracker 13:00                (Moves time forward until it's 1pm)
 !omni set init Bob 15                       (Change Bob's initiative to 15)
 !omni set init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !omni next                                  (When in combat, move to next character's turn)
@@ -46,6 +46,8 @@ GM Commands:
 !omni add Bob 'Team Bravo'
 \`\`\`
 `;
+
+var moment = require('moment');
 
 class omniPlugin {
     constructor (client) {
@@ -159,6 +161,11 @@ class Character {
         return this;
     }
 
+    removeEffect(effectName) {
+        delete this.effects[effectName];
+        return this;
+    }
+
     addEffect(effectName, durationString) {
         var durationInSeconds = 0;
         const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/g;
@@ -249,7 +256,7 @@ class OmniTracker {
 
     constructor (botData) {
         this.characters = {};
-        this.time = new Date(0);
+        this.time;
         this.combat = null;
         this.omniDataMessage = botData.omniData;
         this.combatDataMessage = botData.combatData;
@@ -260,7 +267,7 @@ class OmniTracker {
                     this.characters[data.name] = Character.importJSON(data);
                     break;
                 case 'OmniTracker':
-                    this.date = new Date(data.date);
+                    this.time = new moment(data.date).utc();
                     this.omniDataMessage = data.message;
                     break;
                 case 'Combat':
@@ -272,7 +279,7 @@ class OmniTracker {
     }
 
     toJSON() {
-        return { type: 'OmniTracker', date: this.date, combat: this.combat };
+        return { type: 'OmniTracker', date: this.time, combat: this.combat };
     }
 
     getDateText() {
@@ -281,7 +288,7 @@ class OmniTracker {
         var dayName;
         var hourName;
 
-        switch (this.time.getUTCMonth()) {
+        switch (this.time.month()) {
             case 0:
                 monthName = 'Abadius';
                 break;
@@ -321,7 +328,7 @@ class OmniTracker {
         }
 
         //Days of week
-        switch (this.time.getUTCDay()) {
+        switch (this.time.day()) {
             case 0:
                 dayName = 'Sunday';
                 break;
@@ -346,28 +353,28 @@ class OmniTracker {
         }
 
         //Time of day. We stay vague, so hours is enough
-        var hourNumber = this.time.getUTCHours();
-        if (7 <  hourNumber && hourNumber < 10 ) {
+        var hourNumber = this.time.hour();
+        if (7 <=  hourNumber && hourNumber < 10 ) {
             hourName = 'Morning';
-        } else if (10 <  hourNumber && hourNumber < 12 ) {
+        } else if (10 <=  hourNumber && hourNumber < 12 ) {
             hourName = 'Late Morning';
-        } else if (12 <  hourNumber && hourNumber < 15 ) {
+        } else if (12 <=  hourNumber && hourNumber < 15 ) {
             hourName = 'Afternoon';
-        } else if (15 <  hourNumber && hourNumber < 19 ) {
+        } else if (15 <=  hourNumber && hourNumber < 19 ) {
             hourName = 'Evening';
-        } else if (19 <  hourNumber && hourNumber < 20 ) {
+        } else if (19 <=  hourNumber && hourNumber < 20 ) {
             hourName = 'Dusk';
-        } else if (20 <  hourNumber && hourNumber < 24 ) {
+        } else if (20 <=  hourNumber && hourNumber < 24 ) {
             hourName = 'Night';
-        } else if (hourNumber < 6 ) {
+        } else if (hourNumber < 7 ) {
             hourName = 'Night';
-        } else if (6 <  hourNumber && hourNumber < 7 ) {
+        } else if (6 <=  hourNumber && hourNumber < 7 ) {
             hourName = 'Dawn';
         } else {
             hourName = 'Error!';
         }
 
-        return `{${dayName}, ${this.time.getUTCDate()} ${monthName}; ${hourName}}`;
+        return `{${dayName}, ${this.time.date()} ${monthName}; ${hourName}}`;
     }
 
     getAmbiguousHP() {
@@ -419,29 +426,60 @@ class OmniTracker {
         });
     }
 
-    increaseTimeForCharacter(increaseInSeconds, character) {
+    increaseTimeForCharacter(increaseInSeconds, character, message) {
         //Combat is weird in that while a round is 6 seconds, effects don't end at the end of the round, rather the start of the character turn.
         //So we need to treat combat different, and only increase time for one character at start of their turn when in combat.
         var expiredEffectsMessage = '';
-        for (var effect of character.effects) {
+        for (let effectName in character.effects) {
+            let effect = character.effects[effectName];
             effect.duration =- increaseInSeconds;
             if (effect.duration <= 0) {
-                expiredEffectsMessage =+ `${effect.effect} has ended on ${effect.name}.\n`;
+                expiredEffectsMessage =+ `${character.owner}, ${effect.effect} has ended on ${effect.name}.\n`;
+                delete character.effects[effectName];
             }
         }
-        this.saveBotData();
-        //TODO: this.updateTrackers();
-        return expiredEffectsMessage;
+        if (expiredEffectsMessage) {
+            message.channel.send(expiredEffectsMessage)
+            .catch(console.error);
+        }
     }
 
-    increaseTime(increaseInSeconds) {
-        var expiredEffectsMessage = '';
-        //There's a lot of duplicate code between this and the increaseTimeForChar function that's only used during combat.
-        //I did this to increase performance and reduce edit/message spam the bot sends to the discord server.
-        for (var character of this.characters) {
-            expiredEffectsMessage =+ this.increaseTimeForCharacter(increaseInSeconds, character);
+    increaseTime(stringDuration, message) {
+        const timeRegex = /(?<duration>(?<durationValue>\d+) ?(?<durationUnits>(minute|min|sec|second|hour|day|week|month))s?)|(?<specific>\d?\d:\d\d)|(?<abstract>(midnight|dawn|morning|noon|dusk|night|tomorrow|evening))/i;
+        const parsed = stringDuration.match(timeRegex);
+        const oldTime = new moment(this.time).utc();
+        let expiredEffectsMessage = '';
+
+        if (parsed.groups.duration) {
+            var duration = moment.duration(parseInt(parsed.groups.durationValue), parsed.groups.durationUnits);
+            this.time.add(duration);
+        } else if (parsed.groups.specific) {
+            var duration = moment.duration(parsed.groups.specific);
+            this.time.add(duration);
+        } else if (parsed.groups.abstract){
+            switch (parsed.groups.abstract.toUpperCase()) {
+                case 'TOMORROW':
+                case 'MORNING':
+                    if (this.time.hour() > 7) {
+                        this.time.add(1,'day').hour(7).minute(0).second(0);
+                    } else {
+                        this.time.hour(7).minute(0).second(0);
+                    }
+                    var duration = moment.duration(this.time.diff(oldTime));
+                    break;
+                default:
+                    message.reply(`Sorry, I don't know how to set time to ${parsed.groups.abstract} yet.`).catch(console.error);
+                    break;
+            }
         }
-        return expiredEffectsMessage;
+        let increaseInSeconds = duration.asSeconds();
+        message.reply(`Forwarding time ${oldTime.from(this.time, true)}`)
+        .catch(console.error);
+
+        for (let characterName in this.characters) {
+            const character = this.characters[characterName];
+            expiredEffectsMessage =+ this.increaseTimeForCharacter(increaseInSeconds, character, message);
+        }
     }
 
     saveBotData() {
@@ -481,7 +519,7 @@ class OmniTracker {
 
     updateTrackers() {
         //Search all channels in this guild for Omni Trackers and update them.
-        var updatedTracker = this.generateMessageText();
+        var updatedTracker = this.generateOmniTrackerMessageText();
         for (var channel of this.omniDataMessage.guild.channels) {
             if (channel[1].type == 'text') {
                 channel[1].fetchPinnedMessages()
@@ -498,7 +536,7 @@ class OmniTracker {
         }
     }
 
-    generateMessageText() {
+    generateOmniTrackerMessageText() {
         var output = '```CSS\n[Omni Tracker]\n';
         output += this.getDateText() + '\n\n';
         var characters = Object.keys(this.characters);
@@ -582,6 +620,9 @@ function handleCommand(message) {
         case 'effect':
             manageEffects(command, message);
             break;
+        case 'time':
+            manageTime(command, message);
+            break;
     }
 
 }
@@ -610,7 +651,7 @@ function manageTracker(command, message) {
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
                 omniTracker = new OmniTracker(data);
-                return message.channel.send(omniTracker.generateMessageText());
+                return message.channel.send(omniTracker.generateOmniTrackerMessageText());
             })
             .then(function(newMessage) {
                 return newMessage.pin();
@@ -623,7 +664,7 @@ function manageTracker(command, message) {
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
                 omniTracker = new OmniTracker(data);
-                return message.channel.send(omniTracker.generateMessageText());
+                return message.channel.send(omniTracker.generateOmniTrackerMessageText());
             })
             .catch(console.error);    
             break;
@@ -714,7 +755,7 @@ function manageEffects(command, message) {
                 var characterName = command.groups.target.replace("'","");
                 const effectRegex = /^(?<effectName>('.+?'|\w+))(?<durationInfo>.*)$/i;
 
-                effect = command.groups.properties.match(effectRegex);
+                let effect = command.groups.properties.match(effectRegex);
                 if (effect) {
                     tracker.characters[characterName].addEffect(effect.groups.effectName, effect.groups.durationInfo);
                     tracker.saveBotData();
@@ -726,10 +767,43 @@ function manageEffects(command, message) {
             })
             .catch(console.error);
             break;
+        case 'remove':
+                OmniTracker.getBotDataMessages(message)
+                .then(data => {
+                    var tracker = new OmniTracker(data);
+                    var characterName = command.groups.target.replace("'","");
+                    const effectRegex = /^(?<effectName>('.+?'|\w+))$/;
+                    
+                    let effect = command.groups.properties.match(effectRegex);
+                    tracker.characters[characterName].removeEffect(effect.groups.effectName);
+                    tracker.saveBotData();
+                    tracker.updateTrackers();
+                })
+                .catch(console.error);
+                break;
 
         default:
                 message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
                 .catch(console.error);
 
     }
+}
+
+function manageTime(command, message) {
+    gmOnlyCommand(message)
+    .then(function() {
+        switch (command.groups.verb) {
+            case 'add':
+                OmniTracker.getBotDataMessages(message)
+                .then(data => {
+                    var tracker = new OmniTracker(data);
+    
+                    tracker.increaseTime(command.groups.properties, message);
+                    tracker.saveBotData();               
+                    tracker.updateTrackers();
+                })
+                .catch(console.error);
+                break;
+        }  
+    })
 }
