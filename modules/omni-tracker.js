@@ -432,9 +432,9 @@ class OmniTracker {
         var expiredEffectsMessage = '';
         for (let effectName in character.effects) {
             let effect = character.effects[effectName];
-            effect.duration =- increaseInSeconds;
+            effect.duration -= increaseInSeconds;
             if (effect.duration <= 0) {
-                expiredEffectsMessage =+ `${character.owner}, ${effect.effect} has ended on ${effect.name}.\n`;
+                expiredEffectsMessage += `<@${character.owner}>, ${effectName} has ended on ${character.name}.\n`;
                 delete character.effects[effectName];
             }
         }
@@ -442,13 +442,13 @@ class OmniTracker {
             message.channel.send(expiredEffectsMessage)
             .catch(console.error);
         }
+        return expiredEffectsMessage;
     }
 
     increaseTime(stringDuration, message) {
         const timeRegex = /(?<duration>(?<durationValue>\d+) ?(?<durationUnits>(minute|min|sec|second|hour|day|week|month))s?)|(?<specific>\d?\d:\d\d)|(?<abstract>(midnight|dawn|morning|noon|dusk|night|tomorrow|evening))/i;
         const parsed = stringDuration.match(timeRegex);
         const oldTime = new moment(this.time).utc();
-        let expiredEffectsMessage = '';
 
         if (parsed.groups.duration) {
             var duration = moment.duration(parseInt(parsed.groups.durationValue), parsed.groups.durationUnits);
@@ -478,7 +478,7 @@ class OmniTracker {
 
         for (let characterName in this.characters) {
             const character = this.characters[characterName];
-            expiredEffectsMessage =+ this.increaseTimeForCharacter(increaseInSeconds, character, message);
+            this.increaseTimeForCharacter(increaseInSeconds, character, message);
         }
     }
 
@@ -698,7 +698,7 @@ function managePlayer(command, message) {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace("'","").replace(',','');
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
-                tracker.characters[characterName] = new Player(characterName, message.author.tag, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
+                tracker.characters[characterName] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
 
                 if (command.groups.properties) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
