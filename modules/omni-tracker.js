@@ -26,8 +26,7 @@ Examples:
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
 !omni add player Bob AC:1                       (Adds +1 to Bob's AC)
-!omni roll init Bob Perception
-!omni roll init Bob Stealth
+!omni roll init Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
 !omni roll init Bob +7
 \`\`\`
 `
@@ -53,8 +52,6 @@ GM Commands:
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller');
 const roller = new DiceRoller();
-let roll = roller.roll('100d20');
-console.log(`You rolled: ${roll}`);
 
 class omniPlugin {
     constructor (client) {
