@@ -26,6 +26,9 @@ Examples:
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
 !omni add player Bob AC:1                       (Adds +1 to Bob's AC)
+!omni roll init Bob Perception
+!omni roll init Bob Stealth
+!omni roll init Bob +7
 \`\`\`
 `
 var gmHelpMessage = `
@@ -47,7 +50,11 @@ GM Commands:
 \`\`\`
 `;
 
-var moment = require('moment');
+var Moment = require('moment');
+const { DiceRoller } = require('rpg-dice-roller');
+const roller = new DiceRoller();
+let roll = roller.roll('100d20');
+console.log(`You rolled: ${roll}`);
 
 class omniPlugin {
     constructor (client) {
@@ -267,7 +274,7 @@ class OmniTracker {
                     this.characters[data.name] = Character.importJSON(data);
                     break;
                 case 'OmniTracker':
-                    this.time = new moment(data.date).utc();
+                    this.time = new Moment(data.date).utc();
                     this.omniDataMessage = data.message;
                     break;
                 case 'Combat':
@@ -428,7 +435,7 @@ class OmniTracker {
 
     increaseTimeForCharacter(increaseInSeconds, character, message) {
         //Combat is weird in that while a round is 6 seconds, effects don't end at the end of the round, rather the start of the character turn.
-        //So we need to treat combat different, and only increase time for one character at start of their turn when in combat.
+        //So we need to treat combat different, and only increase time for one character's effects at start of their turn when in combat.
         var expiredEffectsMessage = '';
         for (let effectName in character.effects) {
             let effect = character.effects[effectName];
@@ -448,13 +455,13 @@ class OmniTracker {
     increaseTime(stringDuration, message) {
         const timeRegex = /(?<duration>(?<durationValue>\d+) ?(?<durationUnits>(minute|min|sec|second|hour|day|week|month))s?)|(?<specific>\d?\d:\d\d)|(?<abstract>(midnight|dawn|morning|noon|dusk|night|tomorrow|evening))/i;
         const parsed = stringDuration.match(timeRegex);
-        const oldTime = new moment(this.time).utc();
+        const oldTime = new Moment(this.time).utc();
 
         if (parsed.groups.duration) {
-            var duration = moment.duration(parseInt(parsed.groups.durationValue), parsed.groups.durationUnits);
+            var duration = Moment.duration(parseInt(parsed.groups.durationValue), parsed.groups.durationUnits);
             this.time.add(duration);
         } else if (parsed.groups.specific) {
-            var duration = moment.duration(parsed.groups.specific);
+            var duration = Moment.duration(parsed.groups.specific);
             this.time.add(duration);
         } else if (parsed.groups.abstract){
             switch (parsed.groups.abstract.toUpperCase()) {
@@ -465,7 +472,7 @@ class OmniTracker {
                     } else {
                         this.time.hour(7).minute(0).second(0);
                     }
-                    var duration = moment.duration(this.time.diff(oldTime));
+                    var duration = Moment.duration(this.time.diff(oldTime));
                     break;
                 default:
                     message.reply(`Sorry, I don't know how to set time to ${parsed.groups.abstract} yet.`).catch(console.error);
