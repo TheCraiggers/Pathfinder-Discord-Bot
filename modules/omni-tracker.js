@@ -19,9 +19,9 @@ Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
 Also, stats can use {dice notation} and [references] to other stats. For example, adding a stat called Perception could be written like:
-!omni set player Bob Perception:{1d20+[Expert]+[WIS]}
+!omni set stat Bob Perception:{1d20+[Expert]+[WIS]}
 or, if you don't want to set that all up, simply
-!omni set player Bob Perception:{1d20+7}
+!omni set stat Bob Perception:{1d20+7}
 
 After, you can do things like '!roll init:[Perception]' to roll your perception and set your initiative to the result. Fancy!
 
@@ -37,8 +37,6 @@ Examples:
 !omni add player Bob AC:10                      (Add a new player Bob controlled by the person who typed the command.)
 !omni remove player Bob                         (Add a new player Bob controlled by the person who typed the command.)
 !omni set player Bob AC:20 HP:15/30             (Set Bob's AC to 20 and current HP to 15 of 30.)
-!omni damage player Bob 5
-!omni heal player Bob 5                         (Heal Bob for 5 HP.)
 !omni add effect Bob dizzy 5 rounds             (Make Bob dizzy for 5 rounds.)
 !omni add effect Bob sick 2 days                (Makes Bob sick for 2 days.)
 !omni remove effect Bob Dizzy                   (Remove Dizzy from Bob prematurely)
@@ -75,14 +73,14 @@ const roller = new DiceRoller();
 
 class omniPlugin {
     constructor (client) {
-        const botCommandRegex = /^!(omni|roll|r|init) /;
+        const botCommandRegex = /^!(omni|roll|r|init|heal|damage) /;
         client.on('message', message => {
             if (botCommandRegex.test(message.content)) {
                 handleCommand(message);
             }   
         });
         client.on('messageUpdate', (oldMessage, newMessage) => {
-            if (botCommandRegex.test(newMessage.content) {
+            if (botCommandRegex.test(newMessage.content)) {
                 handleCommand(newMessage);
             }   
         });
@@ -195,15 +193,9 @@ class Character {
     setProperty(propertyName, value) {
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(value);
-        else {
-            const parsed = value.matchAll(Property.propertyReferencesRegex);
-            if (parsed) {
-                for (const lookup of parsed) {
-                    value = this.resolveReference(lookup[1]);
-                }
-            }
+        else
             this.properties[propertyName] = new Property(propertyName, value);
-        }
+            
         return this;
     }
 
