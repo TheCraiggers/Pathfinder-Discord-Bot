@@ -1,7 +1,7 @@
 var helpMessage = `
 \`\`\`
 Most commands follow the '!omni <verb> <noun> <target> <properties>' pattern
-Verbs: add, set, remove, show
+Verbs: add, set, remove, show, roll
 Nouns: tracker, player, effect, enemy, time, shield, property, shield, pet, familiar, group
 Targets: names of players or enemies (quotes required if there are spaces), !players, !enemies, !everybody, !everyone
 Properties: used for setting durations, hit points, etc. AC, HP, etc.
@@ -9,20 +9,21 @@ Properties: used for setting durations, hit points, etc. AC, HP, etc.
 Some commands are typed often so shorter aliases are provided for them. This doesn't mean the longer version doesn't work though!
 
 Aliases:
+!roll <stat>            (Roll the player's given stat that typed this and display it)
+!roll <stat>:<stat>     (Roll the player's stat and put the results in another stat)
+!init                   (Roll perception and save it as your initiative)
+!init Stealth           (Roll the Stealth stat and save it as your initiave)
 
 Stats:
 
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
-Also, stats can use dice notation and [references] to other stats. For example, adding a stat called Perception could be written like:
+Also, stats can use {dice notation} and [references] to other stats. For example, adding a stat called Perception could be written like:
 !omni set player Bob Perception:{1d20+[Expert]+[WIS]}
 or, if you don't want to set that all up, simply
 !omni set player Bob Perception:{1d20+7}
 
-After, you can do things like '!omni set init Bob [Perception]' to roll your perception and set your initiative to the result. Fancy!
-Whenever something is surrounded by [brackets] it causes the bot to immediately compute and/or lookup that value. For example:
-!omni set player Bob Perception {1d20+7}        (This sets Bob's perception to {1d20+7})
-!omni set player Bob Perception [{1d20+7}]      (This rolls 1d20+7 and Bob's perception to the resulting value until changed again)
+After, you can do things like '!roll init:[Perception]' to roll your perception and set your initiative to the result. Fancy!
 
 Special / Reserved stats:
 HP: Character health
@@ -45,7 +46,7 @@ Examples:
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
 !omni add player Bob AC:1                       (Adds +1 to Bob's AC)
-!omni roll player Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
+!omni roll stat Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
 !omni roll player Bob +7
 \`\`\`
 `
@@ -55,7 +56,7 @@ GM Commands:
 
 !omni add tracker here GM                   (Create a GM omni tracker in this channel. GM Trackers show more info than normal trackers, like enemy health.)
 !omni add enemy 8 Skeleton AC:12 HP:5       (Adds 8 Skeletons to combat- will be named 'Skeleton 1' through 'Skeleton 8')
-!omni add enemy 'War Boss' AC:40 HP:300
+!omni add enemy 'War Boss' AC:40 HP:300 Init:{1d20+10}
 !omni add time tracker 10min                (Moves time forward by 10 minutes)
 !omni add time tracker 5 hours
 !omni set time tracker tomorrow             (Moves time forward until it's tomorrow morning)
@@ -74,13 +75,14 @@ const roller = new DiceRoller();
 
 class omniPlugin {
     constructor (client) {
+        const botCommandRegex = /^!(omni|roll|r|init) /;
         client.on('message', message => {
-            if (message.content.startsWith('!omni')) {
+            if (botCommandRegex.test(message.content)) {
                 handleCommand(message);
             }   
         });
         client.on('messageUpdate', (oldMessage, newMessage) => {
-            if (newMessage.content.startsWith('!omni')) {
+            if (botCommandRegex.test(newMessage.content) {
                 handleCommand(newMessage);
             }   
         });
