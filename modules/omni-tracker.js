@@ -13,12 +13,16 @@ Aliases:
 Stats:
 
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
-Also, stats can use {dice notation} and [references] to other stats. For example, adding a stat called Perception could be written like:
+
+Also, stats can use dice notation and [references] to other stats. For example, adding a stat called Perception could be written like:
 !omni set player Bob Perception:{1d20+[Expert]+[WIS]}
 or, if you don't want to set that all up, simply
 !omni set player Bob Perception:{1d20+7}
 
 After, you can do things like '!omni set init Bob [Perception]' to roll your perception and set your initiative to the result. Fancy!
+Whenever something is surrounded by [brackets] it causes the bot to immediately compute and/or lookup that value. For example:
+!omni set player Bob Perception {1d20+7}        (This sets Bob's perception to {1d20+7})
+!omni set player Bob Perception [{1d20+7}]      (This rolls 1d20+7 and Bob's perception to the resulting value until changed again)
 
 Special / Reserved stats:
 HP: Character health
@@ -96,6 +100,7 @@ class Property {
         return `${this.name}:${this.currentValue}`;
     }
 }
+Property.propertyReferencesRegex = /\[(?<lookupReference>\w+)\]/g;
 
 class PropertyRange extends Property {
     constructor(name, currentValue, maxValue, isAboveFold) {
@@ -124,20 +129,6 @@ class Character {
                 newCharacter.properties[property.name] = new PropertyRange(property.name, property.currentValue, property.maxValue, property.isAboveFold);
             else
                 newCharacter.properties[property.name] = new Property(property.name, property.currentValue, property.isAboveFold);
-        }
-
-        //Process all properties, resolving all lookups and replacing them with the correct values.
-        const propertyReferencesRegex = /\[(?<lookupReference>\w+)\]/g;
-        for (let i = 0; i < keys.length; i++) {
-            let property = character.properties[keys[i]];
-            if (property.currentValue) {
-                const parsed = property.currentValue.matchAll(propertyReferencesRegex);
-                for (const reference of parsed) {
-                    console.log(reference);
-                    property.currentValue = property.currentValue.replace(reference[0],3);
-                }
-                
-            }
         }
 
         //Effects
@@ -170,6 +161,27 @@ class Character {
         return foo;
     }
 
+    resolveReference(propertyName) {
+        //This will resolve [References] and return the resolved value
+        //This includes lookups for other stats, and any dice rolls that are needed.
+        //This is RECURSIVE!
+
+        //First, resolve all references, because dice roller won't understand those
+        let property = this.properties[propertyName].currentValue;
+        let parsed = property.matchAll(Property.propertyReferencesRegex);
+        //parsed[0] = full match including brackets
+        //parsed[1] = name of stat only, no brackets
+        for (const lookup of parsed) {
+            property = property.replace(lookup[0],this.resolveReference(lookup[1]));
+        }
+        if (property.indexOf('{') !== -1) {
+            property = property.replace('{','').replace('}','');
+            return roller.roll(property).total;
+        } else {
+            return property;
+        }
+    }
+
     setHealth(currentHP, maxHP) {
 
         this.HP.currentValue = currentHP;
@@ -181,8 +193,15 @@ class Character {
     setProperty(propertyName, value) {
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(value);
-        else 
+        else {
+            const parsed = value.matchAll(Property.propertyReferencesRegex);
+            if (parsed) {
+                for (const lookup of parsed) {
+                    value = this.resolveReference(lookup[1]);
+                }
+            }
             this.properties[propertyName] = new Property(propertyName, value);
+        }
         return this;
     }
 
@@ -656,9 +675,9 @@ function handleCommand(message) {
         case 'time':
             handleTimeCommands(command, message);
             break;
-        case 'init':
-        case 'initiative':
-            handleRollCommands(command, message);
+        case 'stat':
+        case 'property':
+            handlePropertyCommands(command, message);
             break;
     }
 
@@ -754,29 +773,6 @@ function handlePlayerCommands(command, message) {
                 console.error(error);
             });
             break;
-        case 'set':
-            OmniTracker.getBotDataMessages(message)
-            .then(data => {
-                var tracker = new OmniTracker(data);
-                var characterName = command.groups.target.replace("'","");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(\w|\[|\]|\{|\}|\+|-)+))/g;
-                if (tracker.characters[characterName]) {
-                    var properties = command.groups.properties.matchAll(propertiesRegex);
-                    for (property of properties) {
-                        if (property.groups.propertyValue)
-                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                        else
-                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
-                    }
-                    tracker.saveBotData();
-                    tracker.updateTrackers();
-                } else {
-                    message.reply(`Player ${command.groups.target} could not be found.`)
-                    .catch(console.error);
-                }
-            })
-            .catch(error => message.reply(error));
-            break;
         default:
             message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
             .catch(console.error);
@@ -841,22 +837,47 @@ function handleTimeCommands(command, message) {
                 })
                 .catch(console.error);
                 break;
+        
+                default:
+                    message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
+                    .catch(console.error);
+    
         }  
     })
 }
 
-function handleRollCommands(command, message) {
+function handlePropertyCommands(command, message) {
     switch (command.groups.verb) {
         case 'set':
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-
-                
-                tracker.saveBotData();               
-                tracker.updateTrackers();
+                var characterName = command.groups.target.replace("'","");
+                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(\w|\[|\]|\{|\}|\+|-)+))/g;
+                if (tracker.characters[characterName]) {
+                    var properties = command.groups.properties.matchAll(propertiesRegex);
+                    for (property of properties) {
+                        if (property.groups.propertyValue)
+                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
+                        else
+                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
+                    }
+                    tracker.saveBotData();
+                    tracker.updateTrackers();
+                } else {
+                    message.reply(`Player ${command.groups.target} could not be found.`)
+                    .catch(console.error);
+                }
             })
-            .catch(console.error);
+            .catch(error => {
+                console.error(error);
+                message.reply('Sorry, an error was encountered. Please check your command!');
+            });
             break;
+
+        default:
+            message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
+            .catch(console.error);
+
     }  
 }
