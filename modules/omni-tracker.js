@@ -10,6 +10,21 @@ Some commands are typed often so shorter aliases are provided for them. This doe
 
 Aliases:
 
+Stats:
+
+Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
+Also, stats can use {dice notation} and [references] to other stats. For example, adding a stat called Perception could be written like:
+!omni set player Bob Perception:{1d20+[Expert]+[WIS]}
+or, if you don't want to set that all up, simply
+!omni set player Bob Perception:{1d20+7}
+
+After, you can do things like '!omni set init Bob [Perception]' to roll your perception and set your initiative to the result. Fancy!
+
+Special / Reserved stats:
+HP: Character health
+Initiative: The chracter's rolled initiative for combat, used in tracker order
+
+
 Examples:
 
 !omni help                                      (Displays this.)
@@ -26,8 +41,8 @@ Examples:
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
 !omni add player Bob AC:1                       (Adds +1 to Bob's AC)
-!omni roll init Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
-!omni roll init Bob +7
+!omni roll player Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
+!omni roll player Bob +7
 \`\`\`
 `
 var gmHelpMessage = `
@@ -50,7 +65,7 @@ GM Commands:
 `;
 
 var Moment = require('moment');
-const { DiceRoller } = require('rpg-dice-roller');
+const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
 const roller = new DiceRoller();
 
 class omniPlugin {
@@ -109,6 +124,20 @@ class Character {
                 newCharacter.properties[property.name] = new PropertyRange(property.name, property.currentValue, property.maxValue, property.isAboveFold);
             else
                 newCharacter.properties[property.name] = new Property(property.name, property.currentValue, property.isAboveFold);
+        }
+
+        //Process all properties, resolving all lookups and replacing them with the correct values.
+        const propertyReferencesRegex = /\[(?<lookupReference>\w+)\]/g;
+        for (let i = 0; i < keys.length; i++) {
+            let property = character.properties[keys[i]];
+            if (property.currentValue) {
+                const parsed = property.currentValue.matchAll(propertyReferencesRegex);
+                for (const reference of parsed) {
+                    console.log(reference);
+                    property.currentValue = property.currentValue.replace(reference[0],3);
+                }
+                
+            }
         }
 
         //Effects
@@ -616,22 +645,26 @@ function handleCommand(message) {
 
     switch (command.groups.noun) {
         case 'player':
-            managePlayer(command, message);
+            handlePlayerCommands(command, message);
             break;
         case 'tracker':
-            manageTracker(command, message);
+            handleTrackerCommands(command, message);
             break;
         case 'effect':
-            manageEffects(command, message);
+            handleEffectCommands(command, message);
             break;
         case 'time':
-            manageTime(command, message);
+            handleTimeCommands(command, message);
+            break;
+        case 'init':
+        case 'initiative':
+            handleRollCommands(command, message);
             break;
     }
 
 }
 
-function manageTracker(command, message) {
+function handleTrackerCommands(command, message) {
     switch (command.groups.verb) {
         case 'remove':
             gmOnlyCommand(message);
@@ -678,7 +711,7 @@ function manageTracker(command, message) {
     }
 }
 
-function managePlayer(command, message) {
+function handlePlayerCommands(command, message) {
     switch (command.groups.verb) {
         case 'remove':
             gmOnlyCommand(message)
@@ -726,7 +759,7 @@ function managePlayer(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace("'","");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
+                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(\w|\[|\]|\{|\}|\+|-)+))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (property of properties) {
@@ -750,7 +783,7 @@ function managePlayer(command, message) {
     }
 }
 
-function manageEffects(command, message) {
+function handleEffectCommands(command, message) {
     switch (command.groups.verb) {
         case 'add':
             OmniTracker.getBotDataMessages(message)
@@ -793,7 +826,7 @@ function manageEffects(command, message) {
     }
 }
 
-function manageTime(command, message) {
+function handleTimeCommands(command, message) {
     gmOnlyCommand(message)
     .then(function() {
         switch (command.groups.verb) {
@@ -810,4 +843,20 @@ function manageTime(command, message) {
                 break;
         }  
     })
+}
+
+function handleRollCommands(command, message) {
+    switch (command.groups.verb) {
+        case 'set':
+            OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+
+                
+                tracker.saveBotData();               
+                tracker.updateTrackers();
+            })
+            .catch(console.error);
+            break;
+    }  
 }
