@@ -70,10 +70,10 @@ GM Commands:
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
 const roller = new DiceRoller();
+const botCommandRegex = /^!(?<keyword>(omni|roll|r|init|heal|damage)) /;
 
-class omniPlugin {
+class OmniPlugin {
     constructor (client) {
-        const botCommandRegex = /^!(omni|roll|r|init|heal|damage) /;
         client.on('message', message => {
             if (botCommandRegex.test(message.content)) {
                 handleCommand(message);
@@ -87,7 +87,7 @@ class omniPlugin {
         console.log('Successfully loaded Omni Tracker plugin.');
     }
 }
-module.exports = (client) => { return new omniPlugin(client) }
+module.exports = (client) => { return new OmniPlugin(client) }
 
 class Property {
     constructor(name, currentValue, isAboveFold) {
@@ -195,7 +195,7 @@ class Character {
             this.setHealth(value);
         else
             this.properties[propertyName] = new Property(propertyName, value);
-            
+
         return this;
     }
 
@@ -636,45 +636,54 @@ function gmOnlyCommand(message) {
     });
 }
 
-const commandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
+const omniCommandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
 function handleCommand(message) {
     
-    if (message.content.startsWith('!omni help')) {
-        //Handle help first since it doesn't follow the normal verb-noun-target syntax
-        message.author.send(helpMessage)
-        .then(function() {
-            message.author.send(gmHelpMessage);
-        })
-        .catch(console.error);
-        return;
+    const keyword = message.content.match(botCommandRegex).groups.keyword;
+    switch (keyword) {
+        case 'help':
+            message.author.send(helpMessage)
+            .then(function() {
+                message.author.send(gmHelpMessage);
+            })
+            .catch(console.error);
+            return;
+        case 'roll':
+            
+        case 'omni':
+            const command = message.content.match(omniCommandRegex);
+            if (!command) {
+                message.reply('Invalid !omni command. Use !omni help if needed.')
+                .catch(console.error);
+                return;
+            }
+
+            switch (command.groups.noun) {
+                case 'player':
+                    handlePlayerCommands(command, message);
+                    break;
+                case 'tracker':
+                    handleTrackerCommands(command, message);
+                    break;
+                case 'effect':
+                    handleEffectCommands(command, message);
+                    break;
+                case 'time':
+                    handleTimeCommands(command, message);
+                    break;
+                case 'stat':
+                case 'property':
+                    handlePropertyCommands(command, message);
+                    break;
+                default:
+
+            }
+        default:
+            message.reply('Invalid !omni command. Use !omni help if needed.')
+            .catch(console.error);
     }
     
-    var command = message.content.match(commandRegex);
-    if (!command) {
-        message.reply('Invalid !omni command. Use !omni help if needed.')
-        .catch(console.error);
-        return;
-    }
-
-    switch (command.groups.noun) {
-        case 'player':
-            handlePlayerCommands(command, message);
-            break;
-        case 'tracker':
-            handleTrackerCommands(command, message);
-            break;
-        case 'effect':
-            handleEffectCommands(command, message);
-            break;
-        case 'time':
-            handleTimeCommands(command, message);
-            break;
-        case 'stat':
-        case 'property':
-            handlePropertyCommands(command, message);
-            break;
-    }
-
+    
 }
 
 function handleTrackerCommands(command, message) {
