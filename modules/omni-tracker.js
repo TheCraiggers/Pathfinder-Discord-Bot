@@ -10,7 +10,7 @@ Some commands are typed often so shorter aliases are provided for them. This doe
 
 Aliases:
 !roll <stat>            (Roll the player's given stat that typed this and display it)
-!roll <stat>:<stat>     (Roll the player's stat and put the results in another stat)
+!roll <stat1>:<stat2>   (Roll the player's stat2 and put the results in stat1)
 !init                   (Roll perception and save it as your initiative)
 !init Stealth           (Roll the Stealth stat and save it as your initiave)
 
@@ -625,6 +625,13 @@ class OmniTracker {
 
         return output + '```';
     }
+
+    getCharacterFromAuthorID(ID) {
+        for (var characterName in this.characters) {
+            if (this.characters[characterName].owner == ID)
+                return this.characters[characterName];
+        }
+    }
 }
 
 function gmOnlyCommand(message) {
@@ -649,7 +656,8 @@ function handleCommand(message) {
             .catch(console.error);
             return;
         case 'roll':
-            
+            handleRollCommands(message);
+            break;
         case 'omni':
             const command = message.content.match(omniCommandRegex);
             if (!command) {
@@ -884,3 +892,38 @@ function handlePropertyCommands(command, message) {
 
     }  
 }
+
+const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\w+)/;
+function handleRollCommands(message) {
+    const command = message.content.match(rollCommandRegex);
+    if (!command) {
+        message.reply("Invalid roll command.")
+        .catch(console.error);
+    } else {
+        OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+                //Get the character for the message author so we know who's stat to roll
+                character = tracker.getCharacterFromAuthorID(message.author.id);
+                const output = character.resolveReference(command.groups.sourceStat);
+                if (command.groups.destinationStat) {
+                    character.setProperty(command.groups.destinationStat, output);
+                    message.reply(`${command.groups.destinationStat} has been set to ${output} on character ${character.name}`)
+                    .catch(console.error);
+                } else {
+                    message.reply(`${command.groups.sourceStat} is ${output} on character ${character.name}`)
+                    .catch(console.error);
+                }
+                tracker.saveBotData();
+                tracker.updateTrackers();
+            })
+            .catch(error => {
+                console.error(error);
+                message.reply('Either you made an oopise, or the bot creator did. Probably you. Check your syntax!')
+                .catch(console.error);
+            });
+        
+    }
+}
+
+    
