@@ -655,6 +655,7 @@ function handleCommand(message) {
             })
             .catch(console.error);
             return;
+        case 'r':
         case 'roll':
             handleRollCommands(message);
             break;
