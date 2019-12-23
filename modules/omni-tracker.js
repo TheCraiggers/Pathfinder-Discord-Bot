@@ -191,11 +191,18 @@ class Character {
     }
 
     setProperty(propertyName, value) {
-        if (propertyName.toUpperCase() == 'HP')
-            this.setHealth(value);
-        else
-            this.properties[propertyName] = new Property(propertyName, value);
-
+        switch (propertyName) {
+            case 'HP':
+                this.setHealth(value);
+                break;
+            case 'init':
+            case 'initiative':
+                this.properties['initiative'] = new Property('initiative', value);
+                break;
+            default:
+                this.properties[propertyName] = new Property(propertyName, value);
+        }
+        
         return this;
     }
 
@@ -303,7 +310,7 @@ class OmniTracker {
     constructor (botData) {
         this.characters = {};
         this.time;
-        this.combat = null;
+        this.combatCurrentInit = null;
         this.omniDataMessage = botData.omniData;
         this.combatDataMessage = botData.combatData;
 
@@ -311,21 +318,20 @@ class OmniTracker {
             switch (data.type) {
                 case 'Character':
                     this.characters[data.name] = Character.importJSON(data);
+                    if (this.characters[data.name].properties['initiative'])
+                        this.combat = true;
                     break;
                 case 'OmniTracker':
                     this.time = new Moment(data.date).utc();
+                    this.combatCurrentInit = data.combatCurrentInit;
                     this.omniDataMessage = data.message;
-                    break;
-                case 'Combat':
-                    this.combat = { currentTurn: data.currentTurn};
-                    this.combatDataMessage = data.message;
                     break;
             }
         }
     }
 
     toJSON() {
-        return { type: 'OmniTracker', date: this.time, combat: this.combat };
+        return { type: 'OmniTracker', date: this.time, combat: this.combatCurrentInit };
     }
 
     getDateText() {
@@ -460,14 +466,14 @@ class OmniTracker {
         //Will return a sorted array of keys.
         var foo = this.characters;
         return Object.keys(foo).sort(function (a,b){ 
-            if (foo[a].init == foo[b].init) {
+            if (foo[a].properties['initiative'].currentValue == foo[b].properties['initiative'].currentValue) {
                 if (foo[a].enemy) {
                     return -1;   //Enemies go first in PF2 and if they're both enemies or both PCs than who cares
                 } else {
                     return 1;
                 }
             } else {
-                return foo[b].init - foo[a].init;
+                return foo[b].properties['initiative'].currentValue - foo[a].properties['initiative'].currentValue;
             }
         });
     }
@@ -549,18 +555,6 @@ class OmniTracker {
                 .catch(console.error);
             }
         }
-        
-
-        if (this.combat) {
-            var combatData = `[Combat]\nCURRENT_INIT,${this.combat.currentTurn}\n`;
-            for (var characterName in this.characters) {
-                const char = this.characters[characterName];
-                combatData += `INIT,${char.name},${char.init}\n`;
-            }
-            this.combatDataMessage.edit(combatData)
-            .catch(console.error);
-        }
-
     }
 
     updateTrackers() {
@@ -594,31 +588,37 @@ class OmniTracker {
             var combatIndent = '';
         }
 
-        for (var character in characters) {
-            var foo = this.characters[characters[character]];       //ugh, again
+        for (var characterName in characters) {
+            var character = this.characters[characters[characterName]];       //ugh, again
             if (this.combat) {
-                if (this.combat.currentTurn == foo.name) {
-                    output += `> ${foo.init} | `;
+                if (character.properties['initiative'].currentValue < 10) {
+                    //Indent one space to make small inits line up with bigger ones. Presuming they never get over 100...
+                    var init = ` ${character.properties['initiative'].currentValue}`;
                 } else {
-                    output += `  ${foo.init} | `;
+                    var init = `${character.properties['initiative'].currentValue}`;
+                }
+                if (this.combatCurrentInit == character.properties['initiative'].currentValue) {
+                    output += `> ${init} | `;
+                } else {
+                    output += `  ${init} | `;
                 }
             }
-            if (foo.enemy) {
-                output += `${foo.name}: <${this.getAmbiguousHP()}>\n`;
+            if (character.enemy) {
+                output += `${character.name}: <${this.getAmbiguousHP()}>\n`;
             } else {
-                output += `${foo.name}: ${foo.HP.currentValue}/${foo.HP.maxValue}`;
+                output += `${character.name}: ${character.HP.currentValue}/${character.HP.maxValue}`;
             }
 
-            for (var propertyName of Object.keys(foo.properties)) {
-                var property = foo.properties[propertyName];
+            for (var propertyName of Object.keys(character.properties)) {
+                var property = character.properties[propertyName];
                 if (property.isAboveFold)
                     output += ` ${property.toString()}`;
             }
             
             output += '\n';
-            for (var effectName of Object.keys(foo.effects)) {
-                var effect = foo.effects[effectName];
-                output += `${combatIndent}${foo.indent} ${effectName} ${[this.getDurationText(effect.duration)]}\n`;
+            for (var effectName of Object.keys(character.effects)) {
+                var effect = character.effects[effectName];
+                output += `${combatIndent}${character.indent} ${effectName} ${[this.getDurationText(effect.duration)]}\n`;
             }
             
         }
@@ -685,11 +685,11 @@ function handleCommand(message) {
                     handlePropertyCommands(command, message);
                     break;
                 default:
-
+                    message.reply('Invalid !omni command. Use !omni help if needed.')
+                    .catch(console.error);
+            
             }
-        default:
-            message.reply('Invalid !omni command. Use !omni help if needed.')
-            .catch(console.error);
+            break;
     }
     
     
