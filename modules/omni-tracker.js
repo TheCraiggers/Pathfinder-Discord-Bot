@@ -659,6 +659,9 @@ function handleCommand(message) {
         case 'roll':
             handleRollCommands(message);
             break;
+        case 'next':
+            handleInitNextCommand(message);
+            break;
         case 'omni':
             const command = message.content.match(omniCommandRegex);
             if (!command) {
@@ -927,4 +930,32 @@ function handleRollCommands(message) {
     }
 }
 
-    
+function handleInitNextCommand(message) {
+    OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                let tracker = new OmniTracker(data);
+                let found = false;
+                if (tracker.combatCurrentInit === undefined)
+                    tracker.combatCurrentInit = 9999;       //I think that should be high enough.
+
+                let sortedCharacterNames = tracker.sortCharsByInit;
+                for (characterName of sortedCharacterNames) {
+                    if (tracker.characters[characterName].properties['initiative'].currentValue <= tracker.combatCurrentInit) {
+                        tracker.combatCurrentInit = tracker.characters[characterName].properties['initiative'].currentValue;
+                        found = true;
+                        break;  //Don't need to keep looking
+                    }
+                }
+
+                if (!found)
+                    tracker.combatCurrentInit = tracker.characters[sortedCharacterNames[0]].properties['initiative'].currentValue;
+
+                tracker.saveBotData();
+                tracker.updateTrackers();
+            })
+            .catch(error => {
+                console.error(error);
+                message.reply('Something went wrong when changing init. What did you do?!')
+                .catch(console.error);
+            });
+}
