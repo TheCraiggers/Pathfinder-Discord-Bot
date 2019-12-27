@@ -69,7 +69,7 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const botCommandRegex = /^!(?<keyword>(omni|roll|r|next|heal|damage))($| )/;
+const botCommandRegex = /^!(?<keyword>(omni|roll|r|next|heal|damage|init))($| )/;
 
 class OmniPlugin {
     constructor (client) {
@@ -661,6 +661,9 @@ function handleCommand(message) {
             break;
         case 'next':
             handleInitNextCommand(message);
+            break;
+        case 'init':
+            handleInitCommands(message);
             break;
         case 'omni':
             const command = message.content.match(omniCommandRegex);

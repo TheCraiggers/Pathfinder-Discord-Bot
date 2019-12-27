@@ -20,7 +20,6 @@ class lookup {
 function lookupTerm(message) {
     var ID=0;
     var searchResults = [];
-    var tmpdir = tmp.dirSync();
     
     const findSearchTerm = /!lookup ([\w ]+)\(?(\d+)?\)?/i;
     var foo = message.content.match(findSearchTerm);
@@ -29,7 +28,7 @@ function lookupTerm(message) {
     if (foo.length > 1)
         var disambiguousSelector = foo[2];
 
-    var disambiguousMessage = "Please select the correct result by editing your previous message with the selection in parenthesis at the end:\n\n";
+    var disambiguousMessageText = "Found more than one possible term. Please let me know which one to look up by simply responding with the number.\n\n";
     var disambiguousMessageCount = 0;
     const findID = /value='(\d+)'/i;
     const findResult = new RegExp("<strong>(" + searchTerm + ")</strong>.*<small>(.*?)</small>.*value='(\\d+?)'","mis");
@@ -38,24 +37,22 @@ function lookupTerm(message) {
     curl.request({url: 'http://pf2.easytool.es/php/search.php', method:'POST', data:'name='+searchTerm}, async function (err,response) {
     
         responses = response.split('<button'); 
-        console.log("Got " + responses.length-1 + " entries back from EasyTools");
         for (foo of responses) {
             result = findResult.exec(foo);
             if (result) {
                 searchResults.push(result);
                 disambiguousMessageCount++;
-                disambiguousMessage = disambiguousMessage + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
+                disambiguousMessageText = disambiguousMessageText + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
             }
         }
         console.log(searchResults);
         if (!searchResults || searchResults.length == 0) {
-            console.log("Couldn't find any exact matches, lets try an extended search...");
             for (foo of responses) {
                 result = findResultExtended.exec(foo);
                 if (result) {
                     searchResults.push(result);
                     disambiguousMessageCount++;
-                    disambiguousMessage = disambiguousMessage + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
+                    disambiguousMessageText = disambiguousMessageText + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
                 }
             }
         }   
@@ -66,28 +63,55 @@ function lookupTerm(message) {
         
         if (searchResults.length == 1) {
             ID = searchResults[0][3];
+            getImageAndSend(message,ID);
         } else if (disambiguousSelector) {
             ID = searchResults[disambiguousSelector-1][3];
+            getImageAndSend(message,ID);
         }else {
-            message.channel.send(disambiguousMessage);
+            message.reply(disambiguousMessageText)
+                .then(disambiguousMessageMessage => {
+                    const filter = msg => /^\d+$/.test(msg.content) && msg.author.id == message.author.id;
+            
+                    message.channel.awaitMessages(filter, {max: 1, time: 30000, errors: ['time'] })
+                    .then(msg => {
+                        msg = msg.first();
+                        disambiguousMessageMessage.delete().catch(console.error);
+                        ID = searchResults[parseInt(msg.content)-1][3];
+                        getImageAndSend(message,ID);
+                        msg.delete().catch(console.error);
+                    })
+                    .catch(err => {
+                        console.log(err);
+                        disambiguousMessageMessage.delete().catch(console.error);
+                        message.reply('Lookup cancelled.');
+                    });
+                })
+            
         }
-        console.log(ID);
-        
-        if (ID > 0) {
-            console.log("Getting screenshot...");
-            await new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-                .src('http://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
-                .dest(tmpdir.name)
-                .run();
-        
-            console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
-            message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-            .catch(console.error);
-        }
-
-        tmp.setGracefulCleanup();
     }); 
 }
 
+function getImageAndSend(message, ID) {
+    if (ID < 1)
+        throw `Invalid ID given. I can't lookup ${ID}`;
+    let tmpdir = tmp.dirSync();
+    console.log("Getting screenshot...");
+    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
+        .src('http://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
+        .dest(tmpdir.name)
+        .run()
+        .then(function() {
+            console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
+            message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
+            .then(msg => {
+                tmp.setGracefulCleanup();
+            })
+            .catch(error => {
+                console.error(error);
+                tmp.setGracefulCleanup();
+            });
+        })
+        .catch(console.error);
+}
 
 module.exports = (client) => { return new lookup(client) }
