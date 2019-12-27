@@ -931,6 +931,7 @@ function handleRollCommands(message) {
 }
 
 function handleInitNextCommand(message) {
+    gmOnlyCommand();
     OmniTracker.getBotDataMessages(message)
             .then(data => {
                 let tracker = new OmniTracker(data);
