@@ -70,7 +70,7 @@ GM Commands:
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
 const roller = new DiceRoller();
-const botCommandRegex = /^!(?<keyword>(omni|roll|r|init|heal|damage)) /;
+const botCommandRegex = /^!(?<keyword>(omni|roll|r|next|heal|damage))($| )/;
 
 class OmniPlugin {
     constructor (client) {
@@ -331,7 +331,7 @@ class OmniTracker {
     }
 
     toJSON() {
-        return { type: 'OmniTracker', date: this.time, combat: this.combatCurrentInit };
+        return { type: 'OmniTracker', date: this.time, combatCurrentInit: this.combatCurrentInit };
     }
 
     getDateText() {
@@ -597,7 +597,7 @@ class OmniTracker {
                 } else {
                     var init = `${character.properties['initiative'].currentValue}`;
                 }
-                if (this.combatCurrentInit == character.properties['initiative'].currentValue) {
+                if (this.combatCurrentInit == character.name) {
                     output += `> ${init} | `;
                 } else {
                     output += `  ${init} | `;
@@ -934,21 +934,22 @@ function handleInitNextCommand(message) {
     OmniTracker.getBotDataMessages(message)
             .then(data => {
                 let tracker = new OmniTracker(data);
-                let found = false;
-                if (tracker.combatCurrentInit === undefined)
-                    tracker.combatCurrentInit = 9999;       //I think that should be high enough.
 
-                let sortedCharacterNames = tracker.sortCharsByInit;
-                for (characterName of sortedCharacterNames) {
-                    if (tracker.characters[characterName].properties['initiative'].currentValue <= tracker.combatCurrentInit) {
-                        tracker.combatCurrentInit = tracker.characters[characterName].properties['initiative'].currentValue;
-                        found = true;
-                        break;  //Don't need to keep looking
+                let sortedCharacterNames = tracker.sortCharsByInit();
+                if (tracker.combatCurrentInit === undefined) {
+                    tracker.combatCurrentInit = sortedCharacterNames[0];
+                } else {
+                    for (let i = 0; i < sortedCharacterNames.length; i++) {
+                        if (sortedCharacterNames[i] == tracker.combatCurrentInit) {
+                            if (i+1 >= sortedCharacterNames.length - 1) {
+                                tracker.combatCurrentInit = sortedCharacterNames[0]
+                            } else {
+                                tracker.combatCurrentInit = sortedCharacterNames[i+1];
+                            }
+                            break;  //Don't need to keep looking
+                        }
                     }
                 }
-
-                if (!found)
-                    tracker.combatCurrentInit = tracker.characters[sortedCharacterNames[0]].properties['initiative'].currentValue;
 
                 tracker.saveBotData();
                 tracker.updateTrackers();
