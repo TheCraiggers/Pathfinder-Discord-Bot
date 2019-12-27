@@ -69,7 +69,6 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const roller = new DiceRoller();
 const botCommandRegex = /^!(?<keyword>(omni|roll|r|next|heal|damage))($| )/;
 
 class OmniPlugin {
@@ -161,24 +160,25 @@ class Character {
         return foo;
     }
 
-    resolveReference(propertyName) {
+    resolveReference(stuff, roller) {
         //This will resolve [References] and return the resolved value
         //This includes lookups for other stats, and any dice rolls that are needed.
         //This is RECURSIVE!
 
         //First, resolve all references, because dice roller won't understand those
-        let property = this.properties[propertyName].currentValue;
-        let parsed = property.matchAll(Property.propertyReferencesRegex);
+        let parsed = stuff.matchAll(Property.propertyReferencesRegex);
+
         //parsed[0] = full match including brackets
         //parsed[1] = name of stat only, no brackets
         for (const lookup of parsed) {
-            property = property.replace(lookup[0],this.resolveReference(lookup[1]));
+            let property = this.properties[lookup[1]].currentValue;
+            stuff = stuff.replace(lookup[0],this.resolveReference(property, roller));
         }
-        if (property.indexOf('{') !== -1) {
-            property = property.replace('{','').replace('}','');
-            return roller.roll(property).total;
+        if (stuff.indexOf('{') !== -1) {
+            stuff = stuff.replace('{','').replace('}','');
+            return roller.roll(stuff).total;
         } else {
-            return property;
+            return stuff;
         }
     }
 
@@ -897,11 +897,14 @@ function handlePropertyCommands(command, message) {
     }  
 }
 
-const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\w+)/;
+const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>.+)/;
+const diceNotationRegex = /^!r(oll)? (?<diceNotation>.+)$/;
 function handleRollCommands(message) {
     const command = message.content.match(rollCommandRegex);
+    let roller = new DiceRoller();
+
     if (!command) {
-        message.reply("Invalid roll command.")
+        message.reply('Invalid command!')
         .catch(console.error);
     } else {
         OmniTracker.getBotDataMessages(message)
@@ -909,22 +912,32 @@ function handleRollCommands(message) {
                 var tracker = new OmniTracker(data);
                 //Get the character for the message author so we know who's stat to roll
                 character = tracker.getCharacterFromAuthorID(message.author.id);
-                const output = character.resolveReference(command.groups.sourceStat);
+                const output = character.resolveReference(command.groups.sourceStat, roller)*1;
+                if (!Number.isInteger(output)) {
+                    throw "Invalid reference.";
+                }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output);
-                    message.reply(`${command.groups.destinationStat} has been set to ${output} on character ${character.name}`)
+                    message.reply(`${command.groups.destinationStat} has been set to ${output} on character ${character.name}\n${roller}`)
                     .catch(console.error);
                 } else {
-                    message.reply(`${command.groups.sourceStat} is ${output} on character ${character.name}`)
+                    message.reply(`${command.groups.sourceStat} is ${output} on character ${character.name}\n${roller}`)
                     .catch(console.error);
                 }
                 tracker.saveBotData();
                 tracker.updateTrackers();
             })
             .catch(error => {
-                console.error(error);
-                message.reply('Either you made an oopise, or the bot creator did. Probably you. Check your syntax!')
-                .catch(console.error);
+                //If the above was an error, it's probably straight dice notation
+                notation = message.content.match(diceNotationRegex);
+                try {
+                    roller.roll(notation.groups.diceNotation);
+                    message.reply(`${roller}`);
+                } catch(error){
+                    console.error;
+                    message.reply('Invalid roll command!')
+                    .catch(console.error);
+                }
             });
         
     }
