@@ -192,16 +192,18 @@ class Character {
     }
 
     setProperty(propertyName, value) {
+        let roller = new DiceRoller();
+        let newValue = this.resolveReference(value, roller);
         switch (propertyName) {
             case 'HP':
-                this.setHealth(value);
+                this.setHealth(newValue);
                 break;
             case 'init':
             case 'initiative':
-                this.properties['initiative'] = new Property('initiative', value);
+                this.properties['initiative'] = new Property('initiative', newValue);
                 break;
             default:
-                this.properties[propertyName] = new Property(propertyName, value);
+                this.properties[propertyName] = new Property(propertyName, newValue);
         }
         
         return this;
@@ -467,6 +469,11 @@ class OmniTracker {
         //Will return a sorted array of keys.
         var foo = this.characters;
         return Object.keys(foo).sort(function (a,b){ 
+            if (foo[a].properties['initiative'] === undefined) {
+                return 1;
+            } else if (foo[b].properties['initiative'] === undefined) {
+                return -1;
+            }
             if (foo[a].properties['initiative'].currentValue == foo[b].properties['initiative'].currentValue) {
                 if (foo[a].enemy) {
                     return -1;   //Enemies go first in PF2 and if they're both enemies or both PCs than who cares
@@ -592,7 +599,9 @@ class OmniTracker {
         for (var characterName in characters) {
             var character = this.characters[characters[characterName]];       //ugh, again
             if (this.combat) {
-                if (character.properties['initiative'].currentValue < 10) {
+                if (character.properties['initiative'] === undefined) {
+                    var init = '  ';
+                } else if (character.properties['initiative'].currentValue < 10) {
                     //Indent one space to make small inits line up with bigger ones. Presuming they never get over 100...
                     var init = ` ${character.properties['initiative'].currentValue}`;
                 } else {
@@ -605,7 +614,7 @@ class OmniTracker {
                 }
             }
             if (character.enemy) {
-                output += `${character.name}: <${character.getAmbiguousHP()}>\n`;
+                output += `${character.name}: <${character.getAmbiguousHP()}>`;
             } else {
                 output += `${character.name}: ${character.HP.currentValue}/${character.HP.maxValue}`;
             }
