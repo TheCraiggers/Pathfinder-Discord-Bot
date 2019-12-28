@@ -15,7 +15,6 @@ Aliases:
 !init Stealth           (Roll the Stealth stat and save it as your initiave)
 
 Stats:
-
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
 Also, stats can use {dice notation} and [references] to other stats. For example, adding a stat called Perception could be written like:
@@ -28,8 +27,10 @@ After, you can do things like '!roll init:[Perception]' to roll your perception 
 Special / Reserved stats:
 HP: Character health
 Initiative: The chracter's rolled initiative for combat, used in tracker order
-
-
+\`\`\`
+`;
+exampleHelpMessage = `
+\`\`\`
 Examples:
 
 !omni help                                      (Displays this.)
@@ -69,7 +70,7 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const botCommandRegex = /^!(?<keyword>(omni|roll|r|next|heal|damage|init))($| )/;
+const botCommandRegex = /^!(?<keyword>(omni|roll|r|next|heal|damage|init|help))($| )/;
 
 class OmniPlugin {
     constructor (client) {
@@ -115,7 +116,7 @@ class PropertyRange extends Property {
 class Character {
     static importJSON(character) {
         if (character.enemy) {
-            var newCharacter = Enemy(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+            var newCharacter = new Enemy(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
         } else {
             var newCharacter = new Player(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
         }
@@ -268,6 +269,21 @@ class Enemy extends Character {
     constructor(name,owner,currentHP,maxHP,dataMessage) {
         super(name, owner, currentHP,maxHP,dataMessage);
         this.enemy = true;
+    }
+
+    getAmbiguousHP() {
+        var percentage = this.HP.currentValue/this.HP.maxValue;
+        if (percentage < .15) {
+            return 'Critical';
+        } else if (percentage < .5) {
+            return 'Bloodied';
+        } else if (percentage < 1) {
+            return 'Injured';
+        } else if (percentage == 1) {
+            return 'Healthy';
+        } else {
+            return 'Error?';
+        }
     }
 }
 
@@ -427,21 +443,6 @@ class OmniTracker {
         }
 
         return `{${dayName}, ${this.time.date()} ${monthName}; ${hourName}}`;
-    }
-
-    getAmbiguousHP() {
-        var percentage = this.HP.currentValue/this.HP.maxValue;
-        if (percentage < .15) {
-            return 'Critical';
-        } else if (percentage < .5) {
-            return 'Bloodied';
-        } else if (percentage < 1) {
-            return 'Injured';
-        } else if (percentage == 1) {
-            return 'Healthy';
-        } else {
-            return 'Error?';
-        }
     }
 
     getDurationText(duration) {
@@ -604,7 +605,7 @@ class OmniTracker {
                 }
             }
             if (character.enemy) {
-                output += `${character.name}: <${this.getAmbiguousHP()}>\n`;
+                output += `${character.name}: <${character.getAmbiguousHP()}>\n`;
             } else {
                 output += `${character.name}: ${character.HP.currentValue}/${character.HP.maxValue}`;
             }
@@ -648,8 +649,11 @@ function handleCommand(message) {
     
     const keyword = message.content.match(botCommandRegex).groups.keyword;
     switch (keyword) {
-        case 'help':
+        case 'omni help':
             message.author.send(helpMessage)
+            .then(function() {
+                message.author.send(exampleHelpMessage);
+            })
             .then(function() {
                 message.author.send(gmHelpMessage);
             })
@@ -674,6 +678,7 @@ function handleCommand(message) {
             }
 
             switch (command.groups.noun) {
+                case 'enemy':
                 case 'player':
                     handlePlayerCommands(command, message);
                     break;
@@ -772,8 +777,12 @@ function handlePlayerCommands(command, message) {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace("'","").replace(',','');
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
-                tracker.characters[characterName] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
-
+                if (command.groups.noun == 'player') {
+                    tracker.characters[characterName] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
+                } else if (command.groups.noun == 'enemy') {
+                    gmOnlyCommand();
+                    tracker.characters[characterName] = new Enemy(characterName, message.author.id, 0, 0);
+                }
                 if (command.groups.properties) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (property of properties) {
@@ -959,7 +968,7 @@ function handleInitNextCommand(message) {
                     for (let i = 0; i < sortedCharacterNames.length; i++) {
                         if (sortedCharacterNames[i] == tracker.combatCurrentInit) {
                             if (i+1 >= sortedCharacterNames.length - 1) {
-                                tracker.combatCurrentInit = sortedCharacterNames[0]
+                                tracker.combatCurrentInit = sortedCharacterNames[0];
                             } else {
                                 tracker.combatCurrentInit = sortedCharacterNames[i+1];
                             }
@@ -967,6 +976,7 @@ function handleInitNextCommand(message) {
                         }
                     }
                 }
+                tracker.increaseTimeForCharacter(6, tracker.characters[tracker.combatCurrentInit], message);
 
                 tracker.saveBotData();
                 tracker.updateTrackers();
