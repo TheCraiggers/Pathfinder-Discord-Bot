@@ -44,7 +44,6 @@ Examples:
 !omni add effect %players Inspired 1 round      (Gives all PCs the Inspired effect)
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
-!omni add player Bob AC:1                       (Adds +1 to Bob's AC)
 !omni roll stat Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
 !omni roll player Bob +7
 \`\`\`
@@ -192,18 +191,16 @@ class Character {
     }
 
     setProperty(propertyName, value) {
-        let roller = new DiceRoller();
-        let newValue = this.resolveReference(value, roller);
         switch (propertyName) {
             case 'HP':
-                this.setHealth(newValue);
+                this.setHealth(value);
                 break;
             case 'init':
             case 'initiative':
-                this.properties['initiative'] = new Property('initiative', newValue);
+                this.properties['initiative'] = new Property('initiative', value);
                 break;
             default:
-                this.properties[propertyName] = new Property(propertyName, newValue);
+                this.properties[propertyName] = new Property(propertyName, value);
         }
         
         return this;
