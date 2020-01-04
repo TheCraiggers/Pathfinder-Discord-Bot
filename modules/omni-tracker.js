@@ -11,18 +11,18 @@ Some commands are typed often so shorter aliases are provided for them. This doe
 Aliases:
 !roll <stat>            (Roll the player's given stat that typed this and display it)
 !roll <stat1>:<stat2>   (Roll the player's stat2 and put the results in stat1)
-!init                   (Roll perception and save it as your initiative)
-!init Stealth           (Roll the Stealth stat and save it as your initiave)
+!init                   (Roll Perception stat and save it as your Initiative)
+!init Stealth           (Roll the Stealth stat and save it as your Initiave)
 
 Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
-Also, stats can use {dice notation} and [references] to other stats. For example, adding a stat called Perception could be written like:
-!omni set stat Bob Perception:{1d20+[Expert]+[WIS]}
-or, if you don't want to set that all up, simply
-!omni set stat Bob Perception:{1d20+7}
+Also, stats can use {dice notation} and [references] to other stats. Just like in spreadsheets, prefixing with an equals sign
+denotes a formula. For example, adding a dynamic stat called Perception could be written like:
+!omni set stat Bob Perception:={1d20+[Expert]+[WIS]}
 
 After, you can do things like '!roll init:[Perception]' to roll your perception and set your initiative to the result. Fancy!
+If you don't like being fancy, '!roll init:{1d20+7}' still works.
 
 Special / Reserved stats:
 HP: Character health
@@ -165,6 +165,10 @@ class Character {
         //This includes lookups for other stats, and any dice rolls that are needed.
         //This is RECURSIVE!
 
+        //Zeroth, if we have an int, just return it.
+        if (Number.isInteger(stuff))
+            return stuff;
+            
         //First, resolve all references, because dice roller won't understand those
         let parsed = stuff.matchAll(Property.propertyReferencesRegex);
 
@@ -886,14 +890,26 @@ function handlePropertyCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace("'","");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(\w|\[|\]|\{|\}|\+|-)+))/g;
+                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (property of properties) {
-                        if (property.groups.propertyValue)
+                        if (property.groups.propertyValue) {
+                            if (property.groups.propertyValue.startsWith('=')) {
+                                property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
+                            } else {
+                                let roller = new DiceRoller();
+                                property.groups.propertyValue = tracker.characters[characterName].resolveReference(property.groups.propertyValue, roller);
+                                if (roller.log.length > 0) {
+                                    message.reply(`${roller}`);
+                                }
+                            }
                             tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                        else
+                            message.reply(`Property ${property.groups.propertyName} on ${characterName} has been set to ${property.groups.propertyValue}`);
+                        } else {
                             tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
+                            message.reply(`Property ${property.groups.propertyName} on ${characterName} has been set to ${tracker.characters[characterName].properties[propertyName]}`);
+                        }
                     }
                     tracker.saveBotData();
                     tracker.updateTrackers();
