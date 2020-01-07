@@ -642,6 +642,7 @@ class OmniTracker {
     }
 
     getCharacterFromAuthorID(ID) {
+        //Given the Discord ID, return the first character they own.
         for (var characterName in this.characters) {
             if (this.characters[characterName].owner == ID)
                 return this.characters[characterName];
@@ -1003,6 +1004,7 @@ function handleInitNextCommand(message) {
                     }
                 }
                 tracker.increaseTimeForCharacter(6, tracker.characters[tracker.combatCurrentInit], message);
+                message.channel.send(`Hey <@${tracker.characters[tracker.combatCurrentInit].owner}> it's your turn!`);
 
                 tracker.saveBotData();
                 tracker.updateTrackers();
