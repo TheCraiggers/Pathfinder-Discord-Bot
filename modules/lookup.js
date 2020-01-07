@@ -34,7 +34,7 @@ function lookupTerm(message) {
     const findResult = new RegExp("<strong>(" + searchTerm + ")</strong>.*<small>(.*?)</small>.*value='(\\d+?)'","mis");
     const findResultExtended = new RegExp("<strong>(.*?)</strong>.*<small>(.*?)</small>.*value='(\\d+?)'","mis");
 
-    curl.request({url: 'http://pf2.easytool.es/php/search.php', method:'POST', data:'name='+searchTerm}, async function (err,response) {
+    curl.request({url: 'https://pf2.easytool.es/php/search.php', method:'POST', data:'name='+searchTerm}, async function (err,response) {
     
         responses = response.split('<button'); 
         for (foo of responses) {
@@ -97,7 +97,7 @@ function getImageAndSend(message, ID) {
     let tmpdir = tmp.dirSync();
     console.log("Getting screenshot...");
     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-        .src('http://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
+        .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
         .dest(tmpdir.name)
         .run()
         .then(function() {
