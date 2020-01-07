@@ -168,7 +168,7 @@ class Character {
         //Zeroth, if we have an int, just return it.
         if (Number.isInteger(stuff))
             return stuff;
-            
+
         //First, resolve all references, because dice roller won't understand those
         let parsed = stuff.matchAll(Property.propertyReferencesRegex);
 
@@ -585,6 +585,10 @@ class OmniTracker {
         }
     }
 
+    showTrackerInChannel(message) {
+        return message.channel.send(this.generateOmniTrackerMessageText());
+    }
+
     generateOmniTrackerMessageText() {
         var output = '```CSS\n[Omni Tracker]\n';
         output += this.getDateText() + '\n\n';
@@ -989,12 +993,12 @@ function handleInitNextCommand(message) {
                 } else {
                     for (let i = 0; i < sortedCharacterNames.length; i++) {
                         if (sortedCharacterNames[i] == tracker.combatCurrentInit) {
-                            if (i+1 >= sortedCharacterNames.length - 1) {
-                                tracker.combatCurrentInit = sortedCharacterNames[0];
+                            if (i+1 >= sortedCharacterNames.length || tracker.characters[sortedCharacterNames[i+1]].properties['initiative'] == undefined) {      //Are we at the end of the list?
+                                tracker.combatCurrentInit = sortedCharacterNames[0];                                                                            //Reached end of character list, wrap around
                             } else {
                                 tracker.combatCurrentInit = sortedCharacterNames[i+1];
                             }
-                            break;  //Don't need to keep looking
+                            break;  //Don't need to keep looking, we get what we needed
                         }
                     }
                 }
@@ -1002,6 +1006,7 @@ function handleInitNextCommand(message) {
 
                 tracker.saveBotData();
                 tracker.updateTrackers();
+                tracker.showTrackerInChannel(message);
             })
             .catch(error => {
                 console.error(error);
