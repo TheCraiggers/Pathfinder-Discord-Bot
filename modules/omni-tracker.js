@@ -210,6 +210,29 @@ class Character {
         return this;
     }
 
+    showCharacterSynopsis(channel) {
+        let output = '```CSS\n';
+        if (this.enemy) {
+            output += `${this.name}: <${this.getAmbiguousHP()}>`;
+        } else {
+            output += `${this.name}: ${this.HP.currentValue}/${this.HP.maxValue}`;
+        }
+
+        for (var propertyName of Object.keys(this.properties)) {
+            var property = this.properties[propertyName];
+            if (property.isAboveFold)
+                output += ` ${property.toString()}`;
+        }
+        
+        output += '\n';
+        for (var effectName of Object.keys(this.effects)) {
+            var effect = this.effects[effectName];
+            output += `${this.indent} ${effectName} ${[getDurationText(effect.duration)]}\n`;
+        }
+        output += '```';
+        return channel.send(output);
+    }
+
     setPropertyRange(propertyName, currentValue, maxValue) {
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(currentValue,maxValue);
@@ -258,6 +281,24 @@ class Character {
         } else {
             this.effects[effectName] = {duration: durationInSeconds};
         }
+    }
+}
+
+function getDurationText(duration) {
+    if (duration === Infinity) {
+        return '';
+    } else if (duration >= 86400) {
+        var foo = Math.round(duration/86400);
+        return `${foo} day${(foo>1) ? 's':''}`;
+    } else if (duration >= 3600) {
+        var foo = Math.round(duration/3600);
+        return `${foo} hour${(foo>1) ? 's':''}`;
+    } else if (duration >= 60) {
+        var foo = Math.round(duration/60);
+        return `${foo} minute${(foo>1) ? 's':''}`;
+    } else {
+        var foo = Math.round(duration/6);
+        return `${foo} round${(foo>1) ? 's':''}`;
     }
 }
 
@@ -448,24 +489,6 @@ class OmniTracker {
         return `{${dayName}, ${this.time.date()} ${monthName}; ${hourName}}`;
     }
 
-    getDurationText(duration) {
-        if (duration === Infinity) {
-            return '';
-        } else if (duration >= 86400) {
-            var foo = Math.round(duration/86400);
-            return `${foo} day${(foo>1) ? 's':''}`;
-        } else if (duration >= 3600) {
-            var foo = Math.round(duration/3600);
-            return `${foo} hour${(foo>1) ? 's':''}`;
-        } else if (duration >= 60) {
-            var foo = Math.round(duration/60);
-            return `${foo} minute${(foo>1) ? 's':''}`;
-        } else {
-            var foo = Math.round(duration/6);
-            return `${foo} round${(foo>1) ? 's':''}`;
-        }
-    }
-
     sortCharsByInit() {
         //Will return a sorted array of keys.
         var foo = this.characters;
@@ -633,7 +656,7 @@ class OmniTracker {
             output += '\n';
             for (var effectName of Object.keys(character.effects)) {
                 var effect = character.effects[effectName];
-                output += `${combatIndent}${character.indent} ${effectName} ${[this.getDurationText(effect.duration)]}\n`;
+                output += `${combatIndent}${character.indent} ${effectName} ${[getDurationText(effect.duration)]}\n`;
             }
             
         }
@@ -833,6 +856,7 @@ function handleEffectCommands(command, message) {
                 let effect = command.groups.properties.match(effectRegex);
                 if (effect) {
                     tracker.characters[characterName].addEffect(effect.groups.effectName, effect.groups.durationInfo);
+                    tracker.characters[characterName].showCharacterSynopsis(message.channel);
                     tracker.saveBotData();
                     tracker.updateTrackers();
                 } else {
