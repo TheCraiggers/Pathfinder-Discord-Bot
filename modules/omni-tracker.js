@@ -69,7 +69,7 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const botCommandRegex = /^!(?<keyword>(omni help|omni|roll|r|next|heal|damage|init))($| )/;
+const botCommandRegex = /^! ?(?<keyword>(omni help|omni|roll|r|next|heal|damage|init))($| )/;
 
 class OmniPlugin {
     constructor (client) {
@@ -685,6 +685,10 @@ function gmOnlyCommand(message) {
 const omniCommandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
 function handleCommand(message) {
     
+    //Mobile phones like putting a space after the ! for some reason. To make it easier on mobile users, remove that.
+    if (message.content.startsWith('! '))
+        message.content = message.content.replace(/^! /,'!');
+
     const keyword = message.content.match(botCommandRegex).groups.keyword;
     switch (keyword) {
         case 'omni help':
