@@ -855,20 +855,26 @@ function handlePlayerCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace(/'/g,"");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
+                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\S+))/g;
                 if (command.groups.noun == 'player') {
                     tracker.characters[characterName] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
                 } else if (command.groups.noun == 'enemy') {
                     gmOnlyCommand();
                     tracker.characters[characterName] = new Enemy(characterName, message.author.id, 0, 0);
                 }
+                let character = tracker.characters[characterName];
                 if (command.groups.properties) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (property of properties) {
-                        if (property.groups.propertyValue)
-                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                        else
-                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                        if (property.groups.propertyValue) {
+                            let roller = new DiceRoller();
+                            character.setProperty(property.groups.propertyName, character.resolveReference(property.groups.propertyValue, roller));
+                            if (roller.log.length > 0) {
+                                message.reply(`${roller}`);
+                            }
+                        } else {
+                            character.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                        }
                     }
                 }
                 tracker.saveBotData();
@@ -1040,7 +1046,7 @@ function handleRollCommands(message) {
                     roller.roll(notation.groups.diceNotation);
                     message.reply(`${roller}`);
                 } catch(error){
-                    console.error;
+                    console.error(error)
                     message.reply('Invalid roll command!')
                     .catch(console.error);
                 }
