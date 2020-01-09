@@ -55,7 +55,6 @@ var gmHelpMessage = `
 GM Commands:
 
 !omni add tracker here GM                   (Create a GM omni tracker in this channel. GM Trackers show more info than normal trackers, like enemy health.)
-!omni add enemy 8 Skeleton AC:12 HP:5       (Adds 8 Skeletons to combat- will be named 'Skeleton 1' through 'Skeleton 8')
 !omni add enemy 'War Boss' AC:40 HP:300 Init:{1d20+10}
 !omni add time tracker 10min                (Moves time forward by 10 minutes)
 !omni add time tracker 5 hours
@@ -855,7 +854,7 @@ function handlePlayerCommands(command, message) {
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-                var characterName = command.groups.target.replace("'","").replace(',','');
+                var characterName = command.groups.target.replace(/'/g,"");
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\w+))/g;
                 if (command.groups.noun == 'player') {
                     tracker.characters[characterName] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
@@ -894,7 +893,7 @@ function handleEffectCommands(command, message) {
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-                var characterName = command.groups.target.replace("'","");
+                var characterName = command.groups.target.replace(/'/g,"");
                 const effectRegex = /^(?<effectName>('.+?'|\w+))(?<durationInfo>.*)$/i;
 
                 let effect = command.groups.properties.match(effectRegex);
@@ -914,7 +913,7 @@ function handleEffectCommands(command, message) {
                 OmniTracker.getBotDataMessages(message)
                 .then(data => {
                     var tracker = new OmniTracker(data);
-                    var characterName = command.groups.target.replace("'","");
+                    var characterName = command.groups.target.replace(/'/g,"");
                     const effectRegex = /^(?<effectName>('.+?'|\w+))$/;
                     
                     let effect = command.groups.properties.match(effectRegex);
@@ -962,7 +961,7 @@ function handlePropertyCommands(command, message) {
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-                var characterName = command.groups.target.replace("'","");
+                var characterName = command.groups.target.replace(/'/g,"");
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
