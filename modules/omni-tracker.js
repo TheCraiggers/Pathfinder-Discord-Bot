@@ -692,7 +692,7 @@ function gmOnlyCommand(message) {
     });
 }
 
-const omniCommandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|\w+)) ?(?<properties>.*)?$/;
+const omniCommandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|%?\w+)) ?(?<properties>.*)?$/;
 function handleCommand(message) {
     
     //Mobile phones like putting a space after the ! for some reason. To make it easier on mobile users, remove that.
@@ -814,13 +814,37 @@ function handlePlayerCommands(command, message) {
         case 'remove':
             gmOnlyCommand(message)
             .then(function() {
-                OmniTracker.getBotDataMessages(message)    
+                return OmniTracker.getBotDataMessages(message);
             })
             .then(data => {
                 var tracker = new OmniTracker(data);
-                delete tracker.characters[command.groups.target];
-                tracker.saveBotData();
-                tracker.updateTrackers();
+                let promises = [];
+                if (command.groups.target == '%enemies') {
+                    for (characterName in tracker.characters) {
+                        let character = tracker.characters[characterName];
+                        if (character.enemy) {
+                            promises.push(character.dataMessage.delete());
+                        }
+                    }
+                } else {
+                    let character = tracker.characters[command.groups.target];
+                    if (character) {
+                        promises.push(character.dataMessage.delete());
+                    } else {
+                        message.reply(`Couldn't find a character with the name ${command.groups.target}. Please check your spelling!`)
+                        .catch(error => {
+                            console.error(error);
+                        })
+                        return;
+                    }
+                }
+                //Now that everything is being deleted, wait and update the channel when done.
+                Promise.all(promises).then(data => {
+                    return OmniTracker.getBotDataMessages(message)
+                }).then(data => {
+                    var tracker = new OmniTracker(data);
+                    tracker.showTrackerInChannel(message);
+                })
             })
             .catch(error => {
                 message.reply(error);
