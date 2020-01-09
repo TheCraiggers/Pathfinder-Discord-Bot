@@ -13,6 +13,8 @@ Aliases:
 !roll <stat1>:<stat2>   (Roll the player's stat2 and put the results in stat1)
 !init                   (Roll Perception stat and save it as your Initiative)
 !init Stealth           (Roll the Stealth stat and save it as your Initiave)
+!heal Bob 5
+!damage Bob 5
 
 Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
@@ -35,7 +37,7 @@ Examples:
 
 !omni help                                      (Displays this.)
 !omni add tracker here players                  (Create an omni tracker for players in this channel.)
-!omni add player Bob AC:10                      (Add a new player Bob controlled by the person who typed the command.)
+!omni add player Bob AC:10 HP:18/20             (Add a new player Bob controlled by the person who typed the command.)
 !omni remove player Bob                         (Add a new player Bob controlled by the person who typed the command.)
 !omni set player Bob AC:20 HP:15/30             (Set Bob's AC to 20 and current HP to 15 of 30.)
 !omni add effect Bob dizzy 5 rounds             (Make Bob dizzy for 5 rounds.)
@@ -44,8 +46,8 @@ Examples:
 !omni add effect %players Inspired 1 round      (Gives all PCs the Inspired effect)
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
-!omni roll stat Bob Perception                  (Rolls a new initiative for Bog using his Perception stat)
-!omni roll player Bob +7
+!omni set stat Bob init:7                       (Sets Bob's initiatve to 7)
+!omni set stat Bob init:[Perception]            (Computes bob's perception and sets his init to that value)
 \`\`\`
 `
 var gmHelpMessage = `
@@ -102,9 +104,10 @@ class Property {
 Property.propertyReferencesRegex = /\[(?<lookupReference>\w+)\]/g;
 
 class PropertyRange extends Property {
+    //Property ranges only make sense with numbers, so use *1 to force to a number of some sort;
     constructor(name, currentValue, maxValue, isAboveFold) {
-        super(name, currentValue, isAboveFold);
-        this.maxValue = maxValue;
+        super(name, currentValue * 1, isAboveFold);
+        this.maxValue = maxValue * 1;
     }
     
     toString = function() {
@@ -149,6 +152,7 @@ class Character {
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
         this.properties = {};
+        this.properties['HP'] = this.HP;
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
     }
@@ -187,10 +191,16 @@ class Character {
     }
 
     setHealth(currentHP, maxHP) {
-
-        this.HP.currentValue = currentHP;
         if (maxHP !== undefined)
             this.HP.maxValue = maxHP;
+
+        if (currentHP < 0) {
+            currentHP = 0;
+        } else if (currentHP > this.HP.maxValue) {
+            currentHP = this.HP.maxValue;
+        }
+        this.HP.currentValue = currentHP;
+        
         return this;
     }
 
@@ -705,6 +715,10 @@ function handleCommand(message) {
         case 'roll':
             handleRollCommands(message);
             break;
+        case 'heal':
+        case 'damage':
+            handleChangingHP(message);
+            break;
         case 'next':
             handleInitNextCommand(message);
             break;
@@ -836,6 +850,8 @@ function handlePlayerCommands(command, message) {
                 }
                 tracker.saveBotData();
                 tracker.updateTrackers();
+                message.reply(`Added new character ${characterName}`);
+                tracker.characters[characterName].showCharacterSynopsis(message.channel);
             })
             .catch(error => {
                 message.reply('Sorry, there was an error. Check your syntax!');
@@ -938,10 +954,10 @@ function handlePropertyCommands(command, message) {
                                 }
                             }
                             tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                            message.reply(`Property ${property.groups.propertyName} on ${characterName} has been set to ${property.groups.propertyValue}`);
+                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName]}`);
                         } else {
                             tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
-                            message.reply(`Property ${property.groups.propertyName} on ${characterName} has been set to ${tracker.characters[characterName].properties[propertyName]}`);
+                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName]}`);
                         }
                     }
                     tracker.saveBotData();
@@ -1043,4 +1059,36 @@ function handleInitNextCommand(message) {
                 message.reply('Something went wrong when changing init. What did you do?!')
                 .catch(console.error);
             });
+}
+
+const changeHpRegex = /^!(?<heal_or_damage>(heal|damage)) (?<target>('.+?'|\w+)) (?<delta>\d+)$/i;
+
+function handleChangingHP(message) {
+    OmniTracker.getBotDataMessages(message)
+        .then(data => {
+            let tracker = new OmniTracker(data);
+            let parsed = message.content.match(changeHpRegex);
+
+            if (!parsed) {
+                message.reply('Invalid command syntax!');
+                return;
+            }
+
+            if (parsed.groups.heal_or_damage == 'damage') {
+                parsed.groups.delta *= -1;      //Damage is just negative healing!
+            } else {
+                parsed.groups.delta *= 1;       //Force to a number
+            }
+
+            let character = tracker.characters[parsed.groups.target]
+            if (character == undefined) {
+                message.reply(`Could not find a character with that name!`);
+                return;
+            } else {
+                character.setHealth(character.HP.currentValue + parsed.groups.delta);
+                tracker.saveBotData();
+                tracker.updateTrackers();
+                character.showCharacterSynopsis(message.channel);
+            }
+        });   
 }
