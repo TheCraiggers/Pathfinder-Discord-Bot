@@ -941,8 +941,37 @@ function handleEffectCommands(command, message) {
 
                 let effect = command.groups.properties.match(effectRegex);
                 if (effect) {
-                    tracker.characters[characterName].addEffect(effect.groups.effectName, effect.groups.durationInfo);
-                    tracker.characters[characterName].showCharacterSynopsis(message.channel);
+                    switch (command.groups.target) {
+                        case '%players':
+                            for (characterName in tracker.characters) {
+                                let character = tracker.characters[characterName];
+                                if (!character.enemy) {
+                                    character.addEffect(effect.groups.effectName, effect.groups.durationInfo);
+                                    character.showCharacterSynopsis(message.channel);
+                                }
+                            }
+                            break;
+                        case '%enemies':
+                            for (characterName in tracker.characters) {
+                                let character = tracker.characters[characterName];
+                                if (character.enemy) {
+                                    character.addEffect(effect.groups.effectName, effect.groups.durationInfo);
+                                    character.showCharacterSynopsis(message.channel);
+                                }
+                            }
+                            break;
+                        case '%all':
+                            for (characterName in tracker.characters) {
+                                let character = tracker.characters[characterName];
+                                character.addEffect(effect.groups.effectName, effect.groups.durationInfo);
+                                character.showCharacterSynopsis(message.channel);
+                            }
+                            break;
+                        default:
+                            tracker.characters[characterName].addEffect(effect.groups.effectName, effect.groups.durationInfo);
+                            tracker.characters[characterName].showCharacterSynopsis(message.channel);
+                            break;
+                    }
                     tracker.saveBotData();
                     tracker.updateTrackers();
                 } else {
