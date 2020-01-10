@@ -99,6 +99,16 @@ class Property {
     toString = function() {
         return `${this.name}:${this.currentValue}`;
     }
+
+    static translateAliasedPropertyNames(propertyName) {
+        //Given an aliased property name, will return the name it should point to. Or the same string, if it's not an alias.
+        switch (propertyName.toUpperCase()) {
+            case 'INIT':
+                return 'initiative';
+            default:
+                return propertyName;
+        }
+    }
 }
 Property.propertyReferencesRegex = /\[(?<lookupReference>\w+)\]/g;
 
@@ -204,11 +214,10 @@ class Character {
     }
 
     setProperty(propertyName, value) {
-        switch (propertyName) {
+        switch (propertyName) {             //Some props are so important they exist on the char object. Deal with those.
             case 'HP':
                 this.setHealth(value);
                 break;
-            case 'init':
             case 'initiative':
                 this.properties['initiative'] = new Property('initiative', value);
                 break;
@@ -972,6 +981,7 @@ function handlePropertyCommands(command, message) {
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (property of properties) {
+                        property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
                         if (property.groups.propertyValue) {
                             if (property.groups.propertyValue.startsWith('=')) {
                                 property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
