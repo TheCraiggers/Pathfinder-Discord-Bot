@@ -15,6 +15,7 @@ Aliases:
 !init Stealth           (Roll the Stealth stat and save it as your Initiave)
 !heal Bob 5
 !damage Bob 5
+!time 1 min             (Alias for !omni add time tracker 1 min)
 
 Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
@@ -70,7 +71,7 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const botCommandRegex = /^! ?(?<keyword>(omni help|omni|roll|r|next|heal|damage|init))($| )/;
+const botCommandRegex = /^! ?(?<keyword>(omni help|omni|roll|r|next|heal|damage|init|time))($| )/;
 
 class OmniPlugin {
     constructor (client) {
@@ -552,6 +553,13 @@ class OmniTracker {
         const parsed = stringDuration.match(timeRegex);
         const oldTime = new Moment(this.time).utc();
 
+        //min and sec aren't natively supported, so lets do a quick translate
+        if (/mins?/.test(parsed.groups.durationUnits)) {
+            parsed.groups.durationUnits = 'minute';
+        } else if (/secs?/.test(parsed.groups.durationUnits)) {
+            parsed.groups.durationUnits = 'second';
+        }
+
         if (parsed.groups.duration) {
             var duration = Moment.duration(parseInt(parsed.groups.durationValue), parsed.groups.durationUnits);
             this.time.add(duration);
@@ -732,6 +740,11 @@ function handleCommand(message) {
             break;
         case 'init':
             handleInitCommands(message);
+            break;
+        case 'time':
+            let parsedCommand = message.content.match(/^! ?time (?<properties>.+)$/);
+            parsedCommand.groups.verb = 'add';
+            handleTimeCommands(parsedCommand, message);
             break;
         case 'omni':
             const command = message.content.match(omniCommandRegex);
