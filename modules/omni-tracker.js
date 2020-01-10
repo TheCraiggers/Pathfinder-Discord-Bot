@@ -8,7 +8,7 @@ Properties: used for setting durations, hit points, etc. AC, HP, etc.
 
 Some commands are typed often so shorter aliases are provided for them. This doesn't mean the longer version doesn't work though!
 
-Aliases:
+# Aliases
 !roll <stat>            (Roll the player's given stat that typed this and display it)
 !roll <stat1>:<stat2>   (Roll the player's stat2 and put the results in stat1)
 !init                   (Roll Perception stat and save it as your Initiative)
@@ -17,7 +17,7 @@ Aliases:
 !damage Bob 5
 !time 1 min             (Alias for !omni add time tracker 1 min)
 
-Stats:
+# Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
 Also, stats can use {dice notation} and [references] to other stats. Just like in spreadsheets, prefixing with an equals sign
@@ -27,7 +27,7 @@ denotes a formula. For example, adding a dynamic stat called Perception could be
 After, you can do things like '!roll init:[Perception]' to roll your perception and set your initiative to the result. Fancy!
 If you don't like being fancy, '!roll init:{1d20+7}' still works.
 
-Special / Reserved stats:
+# Special / Reserved stats:
 HP: Character health
 Initiative: The chracter's rolled initiative for combat, used in tracker order
 \`\`\`
@@ -56,7 +56,7 @@ var gmHelpMessage = `
 GM Commands:
 
 !omni add tracker here GM                   (Create a GM omni tracker in this channel. GM Trackers show more info than normal trackers, like enemy health.)
-!omni add enemy 'War Boss' AC:40 HP:300 Init:{1d20+10}
+!omni add enemy 'War Boss' AC:40 HP:300/300 Init:{1d20+10}
 !omni add time tracker 10min                (Moves time forward by 10 minutes)
 !omni add time tracker 5 hours
 !omni set time tracker tomorrow             (Moves time forward until it's tomorrow morning)
@@ -203,6 +203,9 @@ class Character {
     setHealth(currentHP, maxHP) {
         if (maxHP !== undefined)
             this.HP.maxValue = maxHP;
+        else if (this.HP.maxValue == 0) {
+            this.HP.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
+        }
 
         if (currentHP < 0) {
             currentHP = 0;
@@ -617,13 +620,17 @@ class OmniTracker {
 
     updateTrackers() {
         //Search all channels in this guild for Omni Trackers and update them.
-        var updatedTracker = this.generateOmniTrackerMessageText();
+        let updatedTracker = this.generateOmniTrackerMessageText();
+        let updatedGMTracker = this.generateOmniTrackerMessageText(true);
         for (var channel of this.omniDataMessage.guild.channels) {
             if (channel[1].type == 'text') {
                 channel[1].fetchPinnedMessages()
                 .then(messages => {
                     for (var msg of messages) {
                         if (msg[1].content.startsWith('```CSS\n[Omni Tracker]')) {
+                            msg[1].edit(updatedTracker)
+                            .catch(console.error);
+                        } else if (msg[1].content.startsWith('```CSS\n[Omni GM Tracker]')) {
                             msg[1].edit(updatedTracker)
                             .catch(console.error);
                         }
@@ -638,8 +645,12 @@ class OmniTracker {
         return message.channel.send(this.generateOmniTrackerMessageText());
     }
 
-    generateOmniTrackerMessageText() {
-        var output = '```CSS\n[Omni Tracker]\n';
+    generateOmniTrackerMessageText(isGMTracker) {
+        if (isGMTracker)
+            var output = '```CSS\n[Omni GM Tracker]\n';
+        else 
+            var output = '```CSS\n[Omni Tracker]\n';
+
         output += this.getDateText() + '\n\n';
         var characters = Object.keys(this.characters);
         if (this.combat) {
@@ -667,10 +678,10 @@ class OmniTracker {
                     output += `  ${init} | `;
                 }
             }
-            if (character.enemy) {
-                output += `${character.name}: <${character.getAmbiguousHP()}>`;
-            } else {
+            if (character.enemy == false || isGMTracker) {
                 output += `${character.name}: ${character.HP.currentValue}/${character.HP.maxValue}`;
+            } else {
+                output += `${character.name}: <${character.getAmbiguousHP()}>`;
             }
 
             for (var propertyName of Object.keys(character.properties)) {
@@ -806,8 +817,12 @@ function handleTrackerCommands(command, message) {
             .then(function(data){
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
+                let isGMTracker = false;
+                if (command.groups.properties == 'GM')
+                    isGMTracker = true;
+
                 omniTracker = new OmniTracker(data);
-                return message.channel.send(omniTracker.generateOmniTrackerMessageText());
+                return message.channel.send(omniTracker.generateOmniTrackerMessageText(isGMTracker));
             })
             .then(function(newMessage) {
                 return newMessage.pin();
