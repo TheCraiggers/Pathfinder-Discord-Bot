@@ -989,9 +989,49 @@ function handleEffectCommands(command, message) {
                     const effectRegex = /^(?<effectName>('.+?'|\w+))$/;
                     
                     let effect = command.groups.properties.match(effectRegex);
-                    tracker.characters[characterName].removeEffect(effect.groups.effectName);
-                    tracker.saveBotData();
-                    tracker.updateTrackers();
+
+                    if (effect) {
+                        switch (command.groups.target) {
+                            case '%players':
+                                for (characterName in tracker.characters) {
+                                    let character = tracker.characters[characterName];
+                                    if (!character.enemy) {
+                                        character.removeEffect(effect.groups.effectName);
+                                        character.showCharacterSynopsis(message.channel);
+                                    }
+                                }
+                                break;
+                            case '%enemies':
+                                for (characterName in tracker.characters) {
+                                    let character = tracker.characters[characterName];
+                                    if (character.enemy) {
+                                        character.removeEffect(effect.groups.effectName);
+                                        character.showCharacterSynopsis(message.channel);
+                                    }
+                                }
+                                break;
+                            case '%all':
+                                for (characterName in tracker.characters) {
+                                    let character = tracker.characters[characterName];
+                                    character.removeEffect(effect.groups.effectName);
+                                    character.showCharacterSynopsis(message.channel);
+                                }
+                                break;
+                            default:
+                                tracker.characters[characterName].removeEffect(effect.groups.effectName);
+                                tracker.characters[characterName].showCharacterSynopsis(message.channel);
+                                break;
+                        }
+                        tracker.saveBotData();
+                        tracker.updateTrackers();
+                    } else {
+                        message.reply('Invalid effect command.')
+                        .catch(console.error);
+                    }
+
+
+                    
+                    
                 })
                 .catch(console.error);
                 break;
