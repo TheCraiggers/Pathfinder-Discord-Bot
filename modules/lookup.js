@@ -4,13 +4,14 @@ const tmp = require('tmp');
 
 class lookup {
     constructor (client) {
+        let lookupCommandRegex = /^! ?lookup/;
         client.on('message', message => {
-            if (message.content.startsWith('!lookup')) {
+            if (lookupCommandRegex.test(message.content)) {
                 lookupTerm(message);
             }   
         });
         client.on('messageUpdate', (oldMessage, newMessage) => {
-            if (newMessage.content.startsWith('!lookup')) {
+            if (lookupCommandRegex.test(newMessage)) {
                 lookupTerm(newMessage);
             }   
         });
@@ -21,7 +22,7 @@ function lookupTerm(message) {
     var ID=0;
     var searchResults = [];
     
-    const findSearchTerm = /!lookup ([\w ]+)\(?(\d+)?\)?/i;
+    const findSearchTerm = /! ?lookup ([\w ]+)\(?(\d+)?\)?/i;
     var foo = message.content.match(findSearchTerm);
     console.log(foo);
     var searchTerm = foo[1];
