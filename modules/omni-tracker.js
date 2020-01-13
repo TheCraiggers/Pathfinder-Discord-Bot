@@ -929,7 +929,7 @@ function handlePlayerCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 let character = tracker.characters[command.groups.target];
-                if (character) {
+                if (character && !character.enemy) {
                     let output = '```JSON\n';
                     output += `Name: ${character.name}\n\n`;
                     for (propertyName in character.properties) {
@@ -938,7 +938,7 @@ function handlePlayerCommands(command, message) {
                     output += '```';
                     message.reply(output).catch(error => {console.error(error)});
                 } else {
-                    message.reply(`Couldn't find a character with the name ${command.groups.target}. Please check your spelling!`)
+                    message.reply(`Couldn't find a player with the name ${command.groups.target}. Please check your spelling!`)
                     .catch(error => {
                         console.error(error);
                     })
