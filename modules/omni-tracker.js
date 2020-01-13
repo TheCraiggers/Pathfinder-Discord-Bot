@@ -924,6 +924,33 @@ function handlePlayerCommands(command, message) {
                 console.error(error);
             });
             break;
+        case 'show':
+            OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                var tracker = new OmniTracker(data);
+                let character = tracker.characters[command.groups.target];
+                if (character) {
+                    let output = '```JSON\n';
+                    output += `Name: ${character.name}\n\n`;
+                    for (propertyName in character.properties) {
+                        output += `${character.properties[propertyName]}\n`;
+                    }
+                    output += '```';
+                    message.reply(output).catch(error => {console.error(error)});
+                } else {
+                    message.reply(`Couldn't find a character with the name ${command.groups.target}. Please check your spelling!`)
+                    .catch(error => {
+                        console.error(error);
+                    })
+                    return;
+                }
+            })
+            .catch(error => {
+                message.reply('Ooops! Something went wrong. Double check your syntax!');
+                console.error(error);
+            })
+            break;
+
         default:
             message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
             .catch(console.error);
