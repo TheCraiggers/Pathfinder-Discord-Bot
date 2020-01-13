@@ -750,7 +750,16 @@ function handleCommand(message) {
             handleInitNextCommand(message);
             break;
         case 'init':
-            handleInitCommands(message);
+            if (message.content == '!init') {
+                message.content = '!roll init:[Perception]';
+                handleRollCommands(message);
+            } else {
+                let parsed = message.content.match(/!init (?<skill>\w+)/);
+                if (parsed) {
+                    message.content = `!roll init:[${parsed.groups.skill}]`;
+                    handleRollCommands(message);
+                }
+            }
             break;
         case 'time':
             let parsedCommand = message.content.match(/^! ?time (?<properties>.+)$/);
