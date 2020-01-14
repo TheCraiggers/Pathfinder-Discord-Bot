@@ -71,7 +71,7 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const botCommandRegex = /^! ?(?<keyword>(omni help|omni|roll|r|next|heal|damage|init|time))($| )/;
+const botCommandRegex = /^! ?(?<keyword>(omni help|omni setup|omni|roll|r|next|heal|damage|init|time))($| )/;
 
 class OmniPlugin {
     constructor (client) {
@@ -357,10 +357,9 @@ class OmniTracker {
     static getBotDataMessages(message) {
         return new Promise(function(resolve, reject) {
             //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
-            var botDataChannel = message.guild.channels.find(msg => msg.name == 'bot-data');
+            var botDataChannel = message.guild.channels.find(msg => msg.name == 'omni-data');
             if (!botDataChannel) {
-                message.reply('Please use !setup first!');
-    
+                message.reply('Please use !omni setup first!');
             } else {
                 botDataChannel.fetchMessages()
                 .then(function(messages) {
@@ -737,6 +736,9 @@ function handleCommand(message) {
                 message.author.send(gmHelpMessage);
             })
             .catch(console.error);
+            return; //Return so we don't trigger the omni commands below.
+        case 'omni setup':
+            handleOmniSetup(message);
             return;
         case 'r':
         case 'roll':
@@ -1263,4 +1265,42 @@ function handleChangingHP(message) {
                 character.showCharacterSynopsis(message.channel);
             }
         });   
+}
+
+function handleOmniSetup(message) {
+    const channelCategoryName = 'PF2e Helper Bot Data';
+    const dataChannelName = 'omni-data';
+    let gmRole = message.guild.roles.find(role => role.name == 'GM');
+    let botChannelCategory = message.guild.channels.find(category => category.name == channelCategoryName);
+    let botDataChannel = message.guild.channels.find(msg => msg.name == dataChannelName);
+
+    if (!gmRole) {
+        message.guild.createRole({name: 'GM'}).catch(error => {console.error(error)});
+    }
+
+    new Promise(function(resolve, reject) {
+        if (botChannelCategory) {
+            resolve(botChannelCategory);
+        } else {
+            resolve (message.guild.createChannel(channelCategoryName, {
+                type: 'category',
+                permissionOverwrites: [{
+                    id: message.guild.id,
+                    deny: ['READ_MESSAGES']
+                }]
+            }));
+        }
+    })
+    .then(categoryChannel => {
+        if (botDataChannel) {
+            return botDataChannel;
+        } else {
+            return message.guild.createChannel(dataChannelName, {
+                type: 'text',
+                parent: categoryChannel
+            })
+        }
+    })
+    .then(console.log)
+    .catch(console.error);
 }
