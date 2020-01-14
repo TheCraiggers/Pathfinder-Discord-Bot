@@ -1287,7 +1287,11 @@ function handleOmniSetup(message) {
                 permissionOverwrites: [{
                     id: message.guild.id,
                     deny: ['READ_MESSAGES']
-                }]
+                }],
+                permissionOverwrites: [{
+                    id: message.client.user.id,
+                    allow: ['READ_MESSAGES']
+                }],
             }));
         }
     })
