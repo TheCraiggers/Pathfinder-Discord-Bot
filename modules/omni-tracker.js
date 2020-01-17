@@ -138,9 +138,9 @@ class Character {
         for (let i = 0; i < keys.length; i++) {
             const property = character.properties[keys[i]];
             if (property.maxValue)
-                newCharacter.properties[property.name] = new PropertyRange(property.name, property.currentValue, property.maxValue, property.isAboveFold);
+                newCharacter.properties.set(property.name, new PropertyRange(property.name, property.currentValue, property.maxValue, property.isAboveFold));
             else
-                newCharacter.properties[property.name] = new Property(property.name, property.currentValue, property.isAboveFold);
+                newCharacter.properties.set(property.name, new Property(property.name, property.currentValue, property.isAboveFold));
         }
 
         //Effects
@@ -161,8 +161,8 @@ class Character {
         this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
-        this.properties = {};
-        this.properties['HP'] = this.HP;
+        this.properties = new Map();
+        this.properties.set('HP', this.HP);
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
     }
@@ -189,7 +189,7 @@ class Character {
         //parsed[0] = full match including brackets
         //parsed[1] = name of stat only, no brackets
         for (const lookup of parsed) {
-            let property = this.properties[lookup[1]].currentValue;
+            let property = this.properties.get([lookup[1]].currentValue);
             stuff = stuff.replace(lookup[0],this.resolveReference(property, roller));
         }
         if (stuff.indexOf('{') !== -1) {
@@ -223,10 +223,10 @@ class Character {
                 this.setHealth(value);
                 break;
             case 'initiative':
-                this.properties['initiative'] = new Property('initiative', value);
+                this.properties.set('initiative', new Property('initiative', value));
                 break;
             default:
-                this.properties[propertyName] = new Property(propertyName, value);
+                this.properties.set(propertyName, new Property(propertyName, value));
         }
         
         return this;
@@ -240,8 +240,7 @@ class Character {
             output += `${this.name}: ${this.HP.currentValue}/${this.HP.maxValue}`;
         }
 
-        for (var propertyName of Object.keys(this.properties)) {
-            var property = this.properties[propertyName];
+        for (let property of this.properties) {
             if (property.isAboveFold)
                 output += ` ${property.toString()}`;
         }
@@ -259,7 +258,7 @@ class Character {
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(currentValue,maxValue);
         else 
-            this.properties[propertyName] = new PropertyRange(propertyName, currentValue, maxValue);
+            this.properties.set(propertyName, new PropertyRange(propertyName, currentValue, maxValue));
         return this;
     }
 
@@ -399,7 +398,7 @@ class OmniTracker {
             switch (data.type) {
                 case 'Character':
                     this.characters[data.name] = Character.importJSON(data);
-                    if (this.characters[data.name].properties['initiative'])
+                    if (this.characters[data.name].properties.get('initiative'))
                         this.combat = true;
                     break;
                 case 'OmniTracker':
@@ -514,19 +513,19 @@ class OmniTracker {
         //Will return a sorted array of keys.
         var foo = this.characters;
         return Object.keys(foo).sort(function (a,b){ 
-            if (foo[a].properties['initiative'] === undefined) {
+            if (foo[a].properties.get('initiative') === undefined) {
                 return 1;
-            } else if (foo[b].properties['initiative'] === undefined) {
+            } else if (foo[b].properties.get('initiative') === undefined) {
                 return -1;
             }
-            if (foo[a].properties['initiative'].currentValue == foo[b].properties['initiative'].currentValue) {
+            if (foo[a].properties.get('initiative').currentValue == foo[b].properties.get('initiative').currentValue) {
                 if (foo[a].enemy) {
                     return -1;   //Enemies go first in PF2 and if they're both enemies or both PCs than who cares
                 } else {
                     return 1;
                 }
             } else {
-                return foo[b].properties['initiative'].currentValue - foo[a].properties['initiative'].currentValue;
+                return foo[b].properties.get('initiative').currentValue - foo[a].properties.get('initiative').currentValue;
             }
         });
     }
@@ -663,13 +662,13 @@ class OmniTracker {
         for (var characterName in characters) {
             var character = this.characters[characters[characterName]];       //ugh, again
             if (this.combat) {
-                if (character.properties['initiative'] === undefined) {
+                if (character.properties.get('initiative') === undefined) {
                     var init = '  ';
-                } else if (character.properties['initiative'].currentValue < 10) {
+                } else if (character.properties.get('initiative').currentValue < 10) {
                     //Indent one space to make small inits line up with bigger ones. Presuming they never get over 100...
-                    var init = ` ${character.properties['initiative'].currentValue}`;
+                    var init = ` ${character.properties.get('initiative').currentValue}`;
                 } else {
-                    var init = `${character.properties['initiative'].currentValue}`;
+                    var init = `${character.properties.get('initiative').currentValue}`;
                 }
                 if (this.combatCurrentInit == character.name) {
                     output += `> ${init} | `;
@@ -683,8 +682,7 @@ class OmniTracker {
                 output += `${character.name}: <${character.getAmbiguousHP()}>`;
             }
 
-            for (var propertyName of Object.keys(character.properties)) {
-                var property = character.properties[propertyName];
+            for (let property of character.properties) {
                 if (property.isAboveFold)
                     output += ` ${property.toString()}`;
             }
@@ -913,7 +911,7 @@ function handlePlayerCommands(command, message) {
                 let character = tracker.characters[characterName];
                 if (command.groups.properties) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
-                    for (property of properties) {
+                    for (let property of properties) {
                         if (property.groups.propertyValue) {
                             let roller = new DiceRoller();
                             character.setProperty(property.groups.propertyName, character.resolveReference(property.groups.propertyValue, roller));
@@ -943,8 +941,8 @@ function handlePlayerCommands(command, message) {
                 if (character && !character.enemy) {
                     let output = '```JSON\n';
                     output += `Name: ${character.name}\n\n`;
-                    for (propertyName in character.properties) {
-                        output += `${character.properties[propertyName]}\n`;
+                    for (let property of character.properties) {
+                        output += `${property}\n`;
                     }
                     output += '```';
                     message.reply(output).catch(error => {console.error(error)});
@@ -1115,7 +1113,7 @@ function handlePropertyCommands(command, message) {
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
-                    for (property of properties) {
+                    for (let property of properties) {
                         property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
                         if (property.groups.propertyValue) {
                             if (property.groups.propertyValue.startsWith('=')) {
@@ -1128,10 +1126,10 @@ function handlePropertyCommands(command, message) {
                                 }
                             }
                             tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName]}`);
+                            message.reply(`${characterName} ${tracker.characters[characterName].properties.get(property.groups.propertyName)}`);
                         } else {
                             tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
-                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName]}`);
+                            message.reply(`${characterName} ${tracker.characters[characterName].properties.get(property.groups.propertyName)}`);
                         }
                     }
                     tracker.saveBotData();
@@ -1212,7 +1210,7 @@ function handleInitNextCommand(message) {
                 } else {
                     for (let i = 0; i < sortedCharacterNames.length; i++) {
                         if (sortedCharacterNames[i] == tracker.combatCurrentInit) {
-                            if (i+1 >= sortedCharacterNames.length || tracker.characters[sortedCharacterNames[i+1]].properties['initiative'] == undefined) {      //Are we at the end of the list?
+                            if (i+1 >= sortedCharacterNames.length || tracker.characters[sortedCharacterNames[i+1]].properties.get('initiative') == undefined) {      //Are we at the end of the list?
                                 tracker.combatCurrentInit = sortedCharacterNames[0];                                                                            //Reached end of character list, wrap around
                             } else {
                                 tracker.combatCurrentInit = sortedCharacterNames[i+1];
