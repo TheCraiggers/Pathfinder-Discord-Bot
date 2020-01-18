@@ -158,11 +158,10 @@ class Character {
     constructor(name, owner, currentHP, maxHP, dataMessage) {
         this.name = name;
         this.owner = owner;
-        this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
         this.properties = {};
-        this.properties['hp'] = this.HP;
+        this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later. Plus it shouldn't ever be removed.
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
     }
@@ -213,6 +212,7 @@ class Character {
             currentHP = this.HP.maxValue;
         }
         this.HP.currentValue = currentHP;
+        this.properties['hp'] = this.HP;
         
         return this;
     }
@@ -744,11 +744,11 @@ function handleCommand(message) {
             return;
         case 'r':
         case 'roll':
-            handleRollCommands(message.toLowerCase());
+            handleRollCommands(message);
             break;
         case 'heal':
         case 'damage':
-            handleChangingHP(message.toLowerCase());
+            handleChangingHP(message);
             break;
         case 'next':
             handleInitNextCommand(message);
@@ -1121,7 +1121,7 @@ function handlePropertyCommands(command, message) {
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
-                    for (property of properties) {
+                    for (let property of properties) {
                         property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
                         if (property.groups.propertyValue) {
                             if (property.groups.propertyValue.startsWith('=')) {
@@ -1136,7 +1136,7 @@ function handlePropertyCommands(command, message) {
                             tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
                             message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
                         } else {
-                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
+                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
                             message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
                         }
                     }
@@ -1260,7 +1260,7 @@ function handleChangingHP(message) {
                 parsed.groups.delta *= 1;       //Force to a number
             }
 
-            let character = tracker.characters[parsed.groups.target.toLowerCase()]
+            let character = tracker.characters[parsed.groups.target.toLowerCase()];
             if (character == undefined) {
                 message.reply(`Could not find a character with that name!`);
                 return;
