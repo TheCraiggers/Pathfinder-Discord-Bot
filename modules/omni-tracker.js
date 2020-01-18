@@ -168,7 +168,7 @@ class Character {
     }
 
     toJSON() {
-        let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
+        let foo = Object.assign({}, this);  //Copy this character object so when we whack the datamessage below we can still save later.
         foo.type = 'Character';
         foo.dataMessage = null;     //Discord message objects contain circular references that trip up JSON.stringify and we don't need to save all that garbage anyway.
         return foo;
