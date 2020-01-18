@@ -71,7 +71,7 @@ GM Commands:
 
 var Moment = require('moment');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
-const botCommandRegex = /^! ?(?<keyword>(omni help|omni setup|omni|roll|r|next|heal|damage|init|time))($| )/;
+const botCommandRegex = /^! ?(?<keyword>(omni help|omni setup|omni|roll|r|next|heal|damage|init|time))($| )/i;
 
 class OmniPlugin {
     constructor (client) {
@@ -92,13 +92,13 @@ module.exports = (client) => { return new OmniPlugin(client) }
 
 class Property {
     constructor(name, currentValue, isAboveFold) {
-        this.name = name;
+        this.propertyName = name;
         this.currentValue = currentValue;
         this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
     }
     
     toString = function() {
-        return `${this.name}:${this.currentValue}`;
+        return `${this.propertyName}:${this.currentValue}`;
     }
 
     static translateAliasedPropertyNames(propertyName) {
@@ -121,7 +121,7 @@ class PropertyRange extends Property {
     }
     
     toString = function() {
-        return `${this.name}:${this.currentValue}/${this.maxValue}`;
+        return `${this.propertyName}:${this.currentValue}/${this.maxValue}`;
     }
 }
 
@@ -138,9 +138,9 @@ class Character {
         for (let i = 0; i < keys.length; i++) {
             const property = character.properties[keys[i]];
             if (property.maxValue)
-                newCharacter.properties[property.name] = new PropertyRange(property.name, property.currentValue, property.maxValue, property.isAboveFold);
+                newCharacter.properties[property.propertyName.toLowerCase()] = new PropertyRange(property.propertyName, property.currentValue, property.maxValue, property.isAboveFold);
             else
-                newCharacter.properties[property.name] = new Property(property.name, property.currentValue, property.isAboveFold);
+                newCharacter.properties[property.propertyName.toLowerCase()] = new Property(property.propertyName, property.currentValue, property.isAboveFold);
         }
 
         //Effects
@@ -149,7 +149,7 @@ class Character {
             let effect = character.effects[keys[i]];
             if (effect.duration == null)
                 effect.duration = Infinity;
-            newCharacter.effects[keys[i]] = effect;
+            newCharacter.effects[keys[i].toLowerCase()] = effect;
         }
 
         return newCharacter;
@@ -162,7 +162,7 @@ class Character {
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
         this.properties = {};
-        this.properties['HP'] = this.HP;
+        this.properties['hp'] = this.HP;
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
     }
@@ -189,7 +189,7 @@ class Character {
         //parsed[0] = full match including brackets
         //parsed[1] = name of stat only, no brackets
         for (const lookup of parsed) {
-            let property = this.properties[lookup[1]].currentValue;
+            let property = this.properties[lookup[1].toLowerCase()].currentValue;
             stuff = stuff.replace(lookup[0],this.resolveReference(property, roller));
         }
         if (stuff.indexOf('{') !== -1) {
@@ -218,15 +218,15 @@ class Character {
     }
 
     setProperty(propertyName, value) {
-        switch (propertyName) {             //Some props are so important they exist on the char object. Deal with those.
-            case 'HP':
+        switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
+            case 'hp':
                 this.setHealth(value);
                 break;
             case 'initiative':
                 this.properties['initiative'] = new Property('initiative', value);
                 break;
             default:
-                this.properties[propertyName] = new Property(propertyName, value);
+                this.properties[propertyName.toLowerCase()] = new Property(propertyName, value);
         }
         
         return this;
@@ -249,7 +249,7 @@ class Character {
         output += '\n';
         for (var effectName of Object.keys(this.effects)) {
             var effect = this.effects[effectName];
-            output += `${this.indent} ${effectName} ${[getDurationText(effect.duration)]}\n`;
+            output += `${this.indent} ${effect.name} ${[getDurationText(effect.duration)]}\n`;
         }
         output += '```';
         return channel.send(output);
@@ -259,7 +259,7 @@ class Character {
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(currentValue,maxValue);
         else 
-            this.properties[propertyName] = new PropertyRange(propertyName, currentValue, maxValue);
+            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue);
         return this;
     }
 
@@ -270,7 +270,7 @@ class Character {
 
     addEffect(effectName, durationString) {
         var durationInSeconds = 0;
-        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/g;
+        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/gi;
         const durations = durationString.matchAll(durationRegex);
         for (const duration of durations) {
             switch (duration.groups.durationUnits) {
@@ -297,11 +297,11 @@ class Character {
         if (durationInSeconds == 0)
             durationInSeconds = Infinity;       //This means no duration was set, so it'll last until removed.
 
-        if (this.effects[effectName]) {
+        if (this.effects[effectName.toLowerCase()]) {
             //Effect already exists. Compare durations. Highest duration stays
-            this.effects[effectName].duration = Math.max(this.effects[effectName].duration, durationInSeconds);
+            this.effects[effectName.toLowerCase()].duration = Math.max(this.effects[effectName.toLowerCase()].duration, durationInSeconds);
         } else {
-            this.effects[effectName] = {duration: durationInSeconds};
+            this.effects[effectName.toLowerCase()] = {name: effectName, duration: durationInSeconds};
         }
     }
 }
@@ -339,7 +339,9 @@ class Enemy extends Character {
 
     getAmbiguousHP() {
         var percentage = this.HP.currentValue/this.HP.maxValue;
-        if (percentage < .15) {
+        if (percentage <= 0) {
+            return 'Dead';
+        } else if (percentage < .15) {
             return 'Critical';
         } else if (percentage < .5) {
             return 'Bloodied';
@@ -398,8 +400,8 @@ class OmniTracker {
         for (const data of botData) {
             switch (data.type) {
                 case 'Character':
-                    this.characters[data.name] = Character.importJSON(data);
-                    if (this.characters[data.name].properties['initiative'])
+                    this.characters[data.name.toLowerCase()] = Character.importJSON(data);
+                    if (this.characters[data.name.toLowerCase()].properties['initiative'])
                         this.combat = true;
                     break;
                 case 'OmniTracker':
@@ -692,7 +694,7 @@ class OmniTracker {
             output += '\n';
             for (var effectName of Object.keys(character.effects)) {
                 var effect = character.effects[effectName];
-                output += `${combatIndent}${character.indent} ${effectName} ${[getDurationText(effect.duration)]}\n`;
+                output += `${combatIndent}${character.indent} ${effect.name} ${[getDurationText(effect.duration)]}\n`;
             }
             
         }
@@ -718,13 +720,13 @@ function gmOnlyCommand(message) {
     });
 }
 
-const omniCommandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|%?\w+)) ?(?<properties>.*)?$/;
+const omniCommandRegex = /^!omni (?<verb>\w+) (?<noun>\w+) (?<target>('.+?'|%?\w+)) ?(?<properties>.*)?$/i;
 function handleCommand(message) {
     
     //Mobile phones like putting a space after the ! for some reason. To make it easier on mobile users, remove that.
     if (message.content.startsWith('! '))
         message.content = message.content.replace(/^! /,'!');
-
+    
     const keyword = message.content.match(botCommandRegex).groups.keyword;
     switch (keyword) {
         case 'omni help':
@@ -742,29 +744,29 @@ function handleCommand(message) {
             return;
         case 'r':
         case 'roll':
-            handleRollCommands(message);
+            handleRollCommands(message.toLowerCase());
             break;
         case 'heal':
         case 'damage':
-            handleChangingHP(message);
+            handleChangingHP(message.toLowerCase());
             break;
         case 'next':
             handleInitNextCommand(message);
             break;
         case 'init':
             if (message.content == '!init') {
-                message.content = '!roll init:[Perception]';
+                message.content = '!roll init:[perception]';
                 handleRollCommands(message);
             } else {
-                let parsed = message.content.match(/!init (?<skill>\w+)/);
+                let parsed = message.content.match(/!init (?<skill>\w+)/i);
                 if (parsed) {
-                    message.content = `!roll init:[${parsed.groups.skill}]`;
+                    message.content = `!roll init:[${parsed.groups.skill.toLowerCase()}]`;
                     handleRollCommands(message);
                 }
             }
             break;
         case 'time':
-            let parsedCommand = message.content.match(/^! ?time (?<properties>.+)$/);
+            let parsedCommand = message.content.match(/^! ?time (?<properties>.+)$/i);
             parsedCommand.groups.verb = 'add';
             handleTimeCommands(parsedCommand, message);
             break;
@@ -775,8 +777,11 @@ function handleCommand(message) {
                 .catch(console.error);
                 return;
             }
+            //Convert command to lowercase. Target and Props will be handled in their functions as we want to stare their Names as mixed case.
+            command.groups.verb = command.groups.verb.toLowerCase();
+            command.groups.noun = command.groups.noun.toLowerCase();
 
-            switch (command.groups.noun) {
+            switch (command.groups.noun.toLowerCase()) {
                 case 'enemy':
                 case 'player':
                     handlePlayerCommands(command, message);
@@ -829,7 +834,7 @@ function handleTrackerCommands(command, message) {
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
                 let isGMTracker = false;
-                if (command.groups.properties == 'GM')
+                if (command.groups.properties.toUpperCase() == 'GM')
                     isGMTracker = true;
 
                 omniTracker = new OmniTracker(data);
@@ -865,6 +870,7 @@ function handlePlayerCommands(command, message) {
             })
             .then(data => {
                 var tracker = new OmniTracker(data);
+                command.groups.target = command.groups.target.toLowerCase();
                 let promises = [];
                 if (command.groups.target == '%enemies') {
                     for (characterName in tracker.characters) {
@@ -905,12 +911,12 @@ function handlePlayerCommands(command, message) {
                 var characterName = command.groups.target.replace(/'/g,"");
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\S+))/g;
                 if (command.groups.noun == 'player') {
-                    tracker.characters[characterName] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
+                    tracker.characters[characterName.toLowerCase()] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
                 } else if (command.groups.noun == 'enemy') {
                     gmOnlyCommand();
-                    tracker.characters[characterName] = new Enemy(characterName, message.author.id, 0, 0);
+                    tracker.characters[characterName.toLowerCase()] = new Enemy(characterName, message.author.id, 0, 0);
                 }
-                let character = tracker.characters[characterName];
+                let character = tracker.characters[characterName.toLowerCase()];
                 if (command.groups.properties) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (property of properties) {
@@ -928,7 +934,7 @@ function handlePlayerCommands(command, message) {
                 tracker.saveBotData();
                 tracker.updateTrackers();
                 message.reply(`Added new character ${characterName}`);
-                tracker.characters[characterName].showCharacterSynopsis(message.channel);
+                tracker.characters[characterName.toLowerCase()].showCharacterSynopsis(message.channel);
             })
             .catch(error => {
                 message.reply('Sorry, there was an error. Check your syntax!');
@@ -939,7 +945,7 @@ function handlePlayerCommands(command, message) {
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-                let character = tracker.characters[command.groups.target];
+                let character = tracker.characters[command.groups.target.toLowerCase()];
                 if (character && !character.enemy) {
                     let output = '```JSON\n';
                     output += `Name: ${character.name}\n\n`;
@@ -974,12 +980,12 @@ function handleEffectCommands(command, message) {
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-                var characterName = command.groups.target.replace(/'/g,"");
+                var characterName = command.groups.target.toLowerCase().replace(/'/g,"");
                 const effectRegex = /^(?<effectName>('.+?'|\w+))(?<durationInfo>.*)$/i;
 
                 let effect = command.groups.properties.match(effectRegex);
                 if (effect) {
-                    switch (command.groups.target) {
+                    switch (command.groups.target.toLowerCase()) {
                         case '%players':
                             for (characterName in tracker.characters) {
                                 let character = tracker.characters[characterName];
@@ -1029,7 +1035,7 @@ function handleEffectCommands(command, message) {
                     let effect = command.groups.properties.match(effectRegex);
 
                     if (effect) {
-                        switch (command.groups.target) {
+                        switch (command.groups.target.toLowerCase()) {
                             case '%players':
                                 for (characterName in tracker.characters) {
                                     let character = tracker.characters[characterName];
@@ -1056,8 +1062,8 @@ function handleEffectCommands(command, message) {
                                 }
                                 break;
                             default:
-                                tracker.characters[characterName].removeEffect(effect.groups.effectName);
-                                tracker.characters[characterName].showCharacterSynopsis(message.channel);
+                                tracker.characters[characterName.toLowerCase()].removeEffect(effect.groups.effectName.toLowerCase());
+                                tracker.characters[characterName.toLowerCase()].showCharacterSynopsis(message.channel);
                                 break;
                         }
                         tracker.saveBotData();
@@ -1111,7 +1117,7 @@ function handlePropertyCommands(command, message) {
             OmniTracker.getBotDataMessages(message)
             .then(data => {
                 var tracker = new OmniTracker(data);
-                var characterName = command.groups.target.replace(/'/g,"");
+                var characterName = command.groups.target.toLowerCase().replace(/'/g,"");
                 const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
@@ -1128,10 +1134,10 @@ function handlePropertyCommands(command, message) {
                                 }
                             }
                             tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
-                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName]}`);
+                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
                         } else {
                             tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMinValue);
-                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName]}`);
+                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
                         }
                     }
                     tracker.saveBotData();
@@ -1221,7 +1227,7 @@ function handleInitNextCommand(message) {
                         }
                     }
                 }
-                tracker.increaseTimeForCharacter(6, tracker.characters[tracker.combatCurrentInit], message);
+                tracker.increaseTimeForCharacter(6, tracker.characters[tracker.combatCurrentInit], message);        //each round is 6 seconds
                 message.channel.send(`Hey <@${tracker.characters[tracker.combatCurrentInit].owner}> it's your turn!`);
 
                 tracker.saveBotData();
@@ -1254,7 +1260,7 @@ function handleChangingHP(message) {
                 parsed.groups.delta *= 1;       //Force to a number
             }
 
-            let character = tracker.characters[parsed.groups.target]
+            let character = tracker.characters[parsed.groups.target.toLowerCase()]
             if (character == undefined) {
                 message.reply(`Could not find a character with that name!`);
                 return;
