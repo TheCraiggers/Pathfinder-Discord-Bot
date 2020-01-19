@@ -192,7 +192,7 @@ class Character {
             stuff = stuff.replace(lookup[0],this.resolveReference(property, roller));
         }
         if (stuff.indexOf('{') !== -1) {
-            stuff = stuff.replace('{','').replace('}','');
+            stuff = stuff.replace('{','').replace('}','').replace('+-','-');
             return roller.roll(stuff).total;
         } else {
             return stuff;
@@ -1196,7 +1196,7 @@ function handleRollCommands(message) {
                 //If the above was an error, it's probably straight dice notation
                 notation = message.content.match(diceNotationRegex);
                 try {
-                    roller.roll(notation.groups.diceNotation);
+                    roller.roll(notation.groups.diceNotation.replace('+-','-'));
                     message.reply(`${roller}`);
                 } catch(error){
                     console.error(error)
