@@ -4,7 +4,7 @@ const tmp = require('tmp');
 
 class lookup {
     constructor (client) {
-        let lookupCommandRegex = /^! ?lookup/;
+        let lookupCommandRegex = /^! ?lookup/i;
         client.on('message', message => {
             if (lookupCommandRegex.test(message.content)) {
                 lookupTerm(message);
