@@ -217,7 +217,7 @@ class Character {
         return this;
     }
 
-    setProperty(propertyName, value) {
+    setProperty(propertyName, value, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
             case 'hp':
@@ -227,7 +227,7 @@ class Character {
                 this.properties['initiative'] = new Property('initiative', value);
                 break;
             default:
-                this.properties[propertyName.toLowerCase()] = new Property(propertyName, value);
+                this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold);
         }
         
         return this;
@@ -256,12 +256,12 @@ class Character {
         return channel.send(output);
     }
 
-    setPropertyRange(propertyName, currentValue, maxValue) {
+    setPropertyRange(propertyName, currentValue, maxValue, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(currentValue,maxValue);
         else 
-            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue);
+            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold);
         return this;
     }
 
@@ -1120,11 +1120,14 @@ function handlePropertyCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.toLowerCase().replace(/'/g,"");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
+                const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
                 if (tracker.characters[characterName]) {
                     var properties = command.groups.properties.matchAll(propertiesRegex);
                     for (let property of properties) {
                         property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
+                        let important = false;
+                        if (property.groups.important)
+                            important = true;
                         if (property.groups.propertyValue) {
                             if (property.groups.propertyValue.startsWith('=')) {
                                 property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
@@ -1135,7 +1138,7 @@ function handlePropertyCommands(command, message) {
                                     message.reply(`${roller}`);
                                 }
                             }
-                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue);
+                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue, important);
                             message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
                         } else {
                             tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
