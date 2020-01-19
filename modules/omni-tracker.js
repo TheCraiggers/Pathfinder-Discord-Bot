@@ -218,6 +218,7 @@ class Character {
     }
 
     setProperty(propertyName, value) {
+        propertyName = Property.translateAliasedPropertyNames(propertyName);
         switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
             case 'hp':
                 this.setHealth(value);
@@ -256,6 +257,7 @@ class Character {
     }
 
     setPropertyRange(propertyName, currentValue, maxValue) {
+        propertyName = Property.translateAliasedPropertyNames(propertyName);
         if (propertyName.toUpperCase() == 'HP')
             this.setHealth(currentValue,maxValue);
         else 
