@@ -836,7 +836,7 @@ function handleTrackerCommands(command, message) {
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
                 let isGMTracker = false;
-                if (command.groups.properties.toUpperCase() == 'GM')
+                if (command.groups.properties == 'GM')
                     isGMTracker = true;
 
                 omniTracker = new OmniTracker(data);
