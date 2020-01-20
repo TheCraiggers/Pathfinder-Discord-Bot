@@ -20,11 +20,11 @@ Some commands are typed often so shorter aliases are provided for them. This doe
 # Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
-Also, stats can use {dice notation} and [references] to other stats. Just like in spreadsheets, prefixing with an equals sign
+Also, stats can use {dice notation} and references to other stats. Just like in spreadsheets, prefixing with an equals sign
 denotes a formula. For example, adding a dynamic stat called Perception could be written like:
-!omni set stat Bob Perception:={1d20+[Expert]+[WIS]}
+!omni set stat Bob Perception:={1d20}+Expert+WIS
 
-After, you can do things like '!roll init:[Perception]' to roll your perception and set your initiative to the result. Fancy!
+After, you can do things like '!roll init:Perception' to roll your perception and set your initiative to the result. Fancy! Or even just '!init perception'
 If you don't like being fancy, '!roll init:{1d20+7}' still works.
 
 # Special / Reserved stats:
@@ -48,7 +48,7 @@ Examples:
 !omni add effect %all 'On Fire' 1 round         (Makes enemies and players on fire)
 !omni add effect %enemies Dumb 1 round          (Gives all enemies the dumb effect)
 !omni set stat Bob init:7                       (Sets Bob's initiatve to 7)
-!omni set stat Bob init:[Perception]            (Computes bob's perception and sets his init to that value)
+!omni set stat Bob init:Perception              (Computes bob's perception and sets his init to that value)
 \`\`\`
 `
 var gmHelpMessage = `
@@ -64,13 +64,13 @@ GM Commands:
 !omni set init Bob 15                       (Change Bob's initiative to 15)
 !omni set init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !omni next                                  (When in combat, move to next character's turn)
-!omni add group 'Team Bravo'
-!omni add Bob 'Team Bravo'
 \`\`\`
 `;
 
 var Moment = require('moment');
+var math = require('mathjs');
 const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
+const diceRegex = /(?<diceString>{(?<diceNotation>.*?)})/g;
 const botCommandRegex = /^! ?(?<keyword>(omni help|omni setup|omni|roll|r|next|heal|damage|init|time))($| )/i;
 
 class OmniPlugin {
@@ -111,7 +111,7 @@ class Property {
         }
     }
 }
-Property.propertyReferencesRegex = /\[(?<lookupReference>\w+)\]/g;
+Property.propertyReferencesRegex = /(?<lookupReference>[a-zA-Z]+)/g;
 
 class PropertyRange extends Property {
     //Property ranges only make sense with numbers, so use *1 to force to a number of some sort;
@@ -174,29 +174,27 @@ class Character {
     }
 
     resolveReference(stuff, roller) {
-        //This will resolve [References] and return the resolved value
+        //This will resolve properties and return the resolved value
         //This includes lookups for other stats, and any dice rolls that are needed.
         //This is RECURSIVE!
 
-        //Zeroth, if we have an int, just return it.
+        //Zeroth, if the property just contains an int, just return it.
         if (Number.isInteger(stuff))
             return stuff;
 
-        //First, resolve all references, because dice roller won't understand those
-        let parsed = stuff.matchAll(Property.propertyReferencesRegex);
+        //First, roll all dice, as mathjs won't understand those
+        let diceToRoll = stuff.matchAll(diceRegex);
+        for (const roll of diceToRoll) {
+            stuff = stuff.replace(roll.groups.diceString, roller.roll(roll.groups.diceNotation).total);     //Replace all dice rolls with their numbers
+        }
 
-        //parsed[0] = full match including brackets
-        //parsed[1] = name of stat only, no brackets
-        for (const lookup of parsed) {
-            let property = this.properties[lookup[1].toLowerCase()].currentValue;
-            stuff = stuff.replace(lookup[0],this.resolveReference(property, roller));
+        //After all that, are there words left? If so, resolve them
+        let propertiesToEval = stuff.matchAll(Property.propertyReferencesRegex);
+        for (const propertyToEval of propertiesToEval) {
+            stuff = stuff.replace(propertyToEval[0], this.resolveReference(this.properties[propertyToEval[0].toLowerCase()].currentValue, roller));
         }
-        if (stuff.indexOf('{') !== -1) {
-            stuff = stuff.replace('{','').replace('}','').replace('+-','-');
-            return roller.roll(stuff).total;
-        } else {
-            return stuff;
-        }
+
+        return math.compile(stuff).evaluate();
     }
 
     setHealth(currentHP, maxHP) {
@@ -757,12 +755,12 @@ function handleCommand(message) {
             break;
         case 'init':
             if (message.content == '!init') {
-                message.content = '!roll init:[perception]';
+                message.content = '!roll init:perception';
                 handleRollCommands(message);
             } else {
                 let parsed = message.content.match(/!init (?<skill>\w+)/i);
                 if (parsed) {
-                    message.content = `!roll init:[${parsed.groups.skill.toLowerCase()}]`;
+                    message.content = `!roll init:${parsed.groups.skill.toLowerCase()}`;
                     handleRollCommands(message);
                 }
             }
@@ -1186,10 +1184,10 @@ function handleRollCommands(message) {
                 }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output);
-                    message.reply(`${command.groups.destinationStat} has been set to ${output} on character ${character.name}\n${roller}`)
+                    message.reply(`${roller}\n${command.groups.destinationStat} has been set to ${output} on character ${character.name}`)
                     .catch(console.error);
                 } else {
-                    message.reply(`${command.groups.sourceStat} is ${output} on character ${character.name}\n${roller}`)
+                    message.reply(`${roller}\n${command.groups.sourceStat} is ${output} on character ${character.name}`)
                     .catch(console.error);
                 }
                 tracker.saveBotData();

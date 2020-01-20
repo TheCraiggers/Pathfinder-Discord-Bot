@@ -6,6 +6,7 @@
   "dependencies": {
     "curlrequest": "^1.0.1",
     "discord.js": "^11.5.1",
+    "mathjs": "^6.5.0",
     "moment": "^2.24.0",
     "pageres": "^5.2.0",
     "random-js": "^2.1.0",
