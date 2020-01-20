@@ -63,7 +63,7 @@ GM Commands:
 !omni set time tracker 13:00                (Moves time forward until it's 1pm)
 !omni set init Bob 15                       (Change Bob's initiative to 15)
 !omni set init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
-!omni next                                  (When in combat, move to next character's turn)
+!next                                       (When in combat, move to next character's turn)
 \`\`\`
 `;
 
