@@ -673,7 +673,7 @@ class OmniTracker {
                 } else {
                     var init = `${character.properties['initiative'].currentValue}`;
                 }
-                if (this.combatCurrentInit == character.name) {
+                if (this.combatCurrentInit && this.combatCurrentInit.toLowerCase() == character.name.toLowerCase()) {
                     output += `> ${init} | `;
                 } else {
                     output += `  ${init} | `;
@@ -897,6 +897,8 @@ function handlePlayerCommands(command, message) {
                 }).then(data => {
                     var tracker = new OmniTracker(data);
                     tracker.showTrackerInChannel(message);
+                    tracker.updateTrackers();
+                    tracker.saveBotData();
                 })
             })
             .catch(error => {
@@ -1269,9 +1271,41 @@ function handleChangingHP(message) {
                 return;
             } else {
                 character.setHealth(character.HP.currentValue + parsed.groups.delta);
-                tracker.saveBotData();
-                tracker.updateTrackers();
                 character.showCharacterSynopsis(message.channel);
+                if (character.enemy && character.HP.currentValue == 0) {
+                    //Character was an enemy who died, remove and check to see if combat ends
+                    character.dataMessage.delete()
+                    .then(function () {
+                        return message.reply(`Enemy ${character.name} removed from combat.`);
+                    })
+                    .then(function() {
+                        return OmniTracker.getBotDataMessages(message);
+                    })
+                    .then(data => {
+                        tracker = new OmniTracker(data);
+                        let enemiesAlive = false;
+                        for (characterName in tracker.characters) {
+                            if (tracker.characters[characterName].enemy)
+                                enemiesAlive = true;
+                        }
+                        if (!enemiesAlive) {
+                            tracker.combat = false;
+                            delete tracker.combatCurrentInit;
+                            message.channel.send('No more enemies; ending combat.').catch(error => {console.error(error)});
+                            for (characterName in tracker.characters) {
+                                if (tracker.characters[characterName].properties['initiative']) {
+                                    delete tracker.characters[characterName].properties['initiative'];
+                                }
+                            }
+                        }
+                        tracker.saveBotData();
+                        tracker.updateTrackers();
+                    })
+                    .catch(error => {console.error(error)});
+                } else {
+                    tracker.saveBotData();
+                    tracker.updateTrackers();
+                }
             }
         });   
 }
