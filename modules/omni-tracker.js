@@ -772,7 +772,7 @@ function handleCommand(message) {
                 message.content = '!roll init:perception';
                 handleRollCommands(message);
             } else {
-                let parsed = message.content.match(/!init (?<skill>\w+)/i);
+                let parsed = message.content.match(/!init (?<skill>.+)/i);
                 if (parsed) {
                     message.content = `!roll init:${parsed.groups.skill.toLowerCase()}`;
                     handleRollCommands(message);
