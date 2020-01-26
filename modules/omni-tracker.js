@@ -1178,7 +1178,7 @@ function handlePropertyCommands(command, message) {
 
     }  
 }
-const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>.+)(?<rollComment>.*)$/;
+const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
 const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+)(?<rollComment>.*)$/;
 function handleRollCommands(message) {
     const command = message.content.match(rollCommandRegex);
@@ -1199,7 +1199,7 @@ function handleRollCommands(message) {
                 }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output.result);
-                    message.reply(`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable}=${output.result}; ${command.groups.rollComment}`)
+                    message.reply(`\`\`\`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable}=${output.result}; ${command.groups.rollComment}\`\`\``)
                     .catch(console.error);
                 } else {
                     message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable}=${output.result}; ${command.groups.rollComment}\`\`\``)
