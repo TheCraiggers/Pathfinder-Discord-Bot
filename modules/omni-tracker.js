@@ -173,7 +173,7 @@ class Character {
         return foo;
     }
 
-    resolveReference(stuff, roller, extras) {
+    resolveReference(stuff, roller, depth) {
         //This will resolve properties and return the resolved value
         //This includes lookups for other stats, and any dice rolls that are needed.
         //This is RECURSIVE!
@@ -183,12 +183,12 @@ class Character {
             return {result: stuff, humanReadable: stuff};
         }
 
-        if (extras === undefined) {
-            extras = {depth: 0, humanReadable: stuff};
-        } else if (extras.depth > 30) {
+        if (depth === undefined) {
+            depth = 0;
+        } else if (depth > 30) {
             throw "Circular reference detected!";
         } else {
-            extras.depth++;
+            depth++;
         }
         let humanReadable = stuff;
 
@@ -203,7 +203,7 @@ class Character {
         //After all that, are there words left? If so, resolve them
         let propertiesToEval = stuff.matchAll(Property.propertyReferencesRegex);
         for (const propertyToEval of propertiesToEval) {
-            let resolved = this.resolveReference(this.properties[propertyToEval[0].toLowerCase()].currentValue, roller, extras)
+            let resolved = this.resolveReference(this.properties[propertyToEval[0].toLowerCase()].currentValue, roller, depth+1);
             humanReadable = humanReadable.replace(propertyToEval[0], resolved.humanReadable);   //I don't use parens here because it's less readable
             stuff = stuff.replace(propertyToEval[0], '(' + resolved.result + ')');
         }
@@ -1147,7 +1147,7 @@ function handlePropertyCommands(command, message) {
                                 property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
                             } else {
                                 let roller = new DiceRoller();
-                                property.groups.propertyValue = tracker.characters[characterName].resolveReference(property.groups.propertyValue, roller);
+                                property.groups.propertyValue = tracker.characters[characterName].resolveReference(property.groups.propertyValue, roller).result;
                                 if (roller.log.length > 0) {
                                     message.reply(`${roller}`);
                                 }
@@ -1178,9 +1178,8 @@ function handlePropertyCommands(command, message) {
 
     }  
 }
-
-const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>.+)/;
-const diceNotationRegex = /^!r(oll)? (?<diceNotation>.+)$/;
+const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>.+)(?<rollComment>.*)$/;
+const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+)(?<rollComment>.*)$/;
 function handleRollCommands(message) {
     const command = message.content.match(rollCommandRegex);
     let roller = new DiceRoller();
@@ -1200,10 +1199,10 @@ function handleRollCommands(message) {
                 }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output.result);
-                    message.reply(`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable}=${output.result} on character ${character.name}`)
+                    message.reply(`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable}=${output.result}; ${command.groups.rollComment}`)
                     .catch(console.error);
                 } else {
-                    message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable}=${output.result} on character ${character.name}\`\`\``)
+                    message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable}=${output.result}; ${command.groups.rollComment}\`\`\``)
                     .catch(console.error);
                 }
                 tracker.saveBotData();
