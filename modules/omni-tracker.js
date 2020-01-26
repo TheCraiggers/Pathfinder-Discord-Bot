@@ -173,28 +173,42 @@ class Character {
         return foo;
     }
 
-    resolveReference(stuff, roller) {
+    resolveReference(stuff, roller, extras) {
         //This will resolve properties and return the resolved value
         //This includes lookups for other stats, and any dice rolls that are needed.
         //This is RECURSIVE!
 
         //Zeroth, if the property just contains an int, just return it.
-        if (Number.isInteger(stuff))
-            return stuff;
+        if (Number.isInteger(stuff)) {
+            return {result: stuff, humanReadable: stuff};
+        }
+
+        if (extras === undefined) {
+            extras = {depth: 0, humanReadable: stuff};
+        } else if (extras.depth > 30) {
+            throw "Circular reference detected!";
+        } else {
+            extras.depth++;
+        }
+        let humanReadable = stuff;
 
         //First, roll all dice, as mathjs won't understand those
         let diceToRoll = stuff.matchAll(diceRegex);
         for (const roll of diceToRoll) {
-            stuff = stuff.replace(roll.groups.diceString, roller.roll(roll.groups.diceNotation).total);     //Replace all dice rolls with their numbers
+            let diceRollResult = roller.roll(roll.groups.diceNotation).total;
+            humanReadable = humanReadable.replace(roll.groups.diceNotation, diceRollResult);
+            stuff = stuff.replace(roll.groups.diceString, diceRollResult);     //Replace all dice rolls with their numbers
         }
 
         //After all that, are there words left? If so, resolve them
         let propertiesToEval = stuff.matchAll(Property.propertyReferencesRegex);
         for (const propertyToEval of propertiesToEval) {
-            stuff = stuff.replace(propertyToEval[0], this.resolveReference(this.properties[propertyToEval[0].toLowerCase()].currentValue, roller));
+            let resolved = this.resolveReference(this.properties[propertyToEval[0].toLowerCase()].currentValue, roller, extras)
+            humanReadable = humanReadable.replace(propertyToEval[0], resolved.humanReadable);   //I don't use parens here because it's less readable
+            stuff = stuff.replace(propertyToEval[0], '(' + resolved.result + ')');
         }
 
-        return math.compile(stuff).evaluate();
+        return {result: math.compile(stuff).evaluate(), humanReadable: humanReadable};
     }
 
     setHealth(currentHP, maxHP) {
@@ -1180,16 +1194,16 @@ function handleRollCommands(message) {
                 var tracker = new OmniTracker(data);
                 //Get the character for the message author so we know who's stat to roll
                 character = tracker.getCharacterFromAuthorID(message.author.id);
-                const output = character.resolveReference(command.groups.sourceStat, roller)*1;
-                if (!Number.isInteger(output)) {
+                const output = character.resolveReference(command.groups.sourceStat, roller);
+                if (!Number.isInteger(output.result)) {
                     throw "Invalid reference.";
                 }
                 if (command.groups.destinationStat) {
-                    character.setProperty(command.groups.destinationStat, output);
-                    message.reply(`${roller}\n${command.groups.destinationStat} has been set to ${output} on character ${character.name}`)
+                    character.setProperty(command.groups.destinationStat, output.result);
+                    message.reply(`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable}=${output.result} on character ${character.name}`)
                     .catch(console.error);
                 } else {
-                    message.reply(`${roller}\n${command.groups.sourceStat} is ${output} on character ${character.name}`)
+                    message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable}=${output.result} on character ${character.name}\`\`\``)
                     .catch(console.error);
                 }
                 tracker.saveBotData();
