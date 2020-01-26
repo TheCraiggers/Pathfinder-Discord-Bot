@@ -1213,7 +1213,7 @@ function handleRollCommands(message) {
                 notation = message.content.match(diceNotationRegex);
                 try {
                     roller.roll(notation.groups.diceNotation.replace('+-','-'));
-                    message.reply(`${roller}`);
+                    message.reply(`${roller};${notation.groups.rollComment}`);
                 } catch(error){
                     console.error(error)
                     message.reply('Invalid roll command!')
