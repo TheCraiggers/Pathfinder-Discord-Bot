@@ -1199,10 +1199,10 @@ function handleRollCommands(message) {
                 }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output.result);
-                    message.reply(`\`\`\`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable}=${output.result}; ${command.groups.rollComment}\`\`\``)
+                    message.reply(`\`\`\`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable} = ${output.result};${command.groups.rollComment}\`\`\``)
                     .catch(console.error);
                 } else {
-                    message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable}=${output.result}; ${command.groups.rollComment}\`\`\``)
+                    message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable} = ${output.result};${command.groups.rollComment}\`\`\``)
                     .catch(console.error);
                 }
                 tracker.saveBotData();
