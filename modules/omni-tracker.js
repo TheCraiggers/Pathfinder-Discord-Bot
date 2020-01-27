@@ -90,6 +90,26 @@ class OmniPlugin {
 }
 module.exports = (client) => { return new OmniPlugin(client) }
 
+//Custom errors to aid in error messages back to users
+class OmniError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = this.constructor.name;
+    }
+}
+class CharacterNotFoundError extends OmniError {
+    constructor(characterName) {
+        super(`The character ${characterName} was not found.`);
+        this.name = this.constructor.name;
+    }
+}
+class PropertyNotFoundError extends OmniError {
+    constructor(propertyName, characterName) {
+        super(`The property "${propertyName}" was not found on character ${characterName}.`);
+        this.name = this.constructor.name;
+    }
+}
+
 class Property {
     constructor(name, currentValue, isAboveFold) {
         this.propertyName = name;
@@ -277,6 +297,14 @@ class Character {
         return this;
     }
 
+    removeProperty(propertyName) {
+        if (!this.properties[propertyName]) {
+            throw new PropertyNotFoundError(propertyName, this.name);
+        }
+        delete this.properties[propertyName];
+        return this;
+    }
+
     removeEffect(effectName) {
         delete this.effects[effectName];
         return this;
@@ -402,6 +430,15 @@ class OmniTracker {
                 })
             }
         });
+    }
+
+    static handleCommonErrors(message, error) {
+        if (error instanceof OmniError) {
+            message.reply(error.message).catch(err => {console.error(err)});
+            return true;
+        } else {
+            return false;
+        }
     }
 
     constructor (botData) {
@@ -1129,6 +1166,7 @@ function handleTimeCommands(command, message) {
 
 function handlePropertyCommands(command, message) {
     switch (command.groups.verb) {
+        case 'add':
         case 'set':
             OmniTracker.getBotDataMessages(message)
             .then(data => {
@@ -1171,6 +1209,32 @@ function handlePropertyCommands(command, message) {
                 message.reply('Sorry, an error was encountered. Please check your command!');
             });
             break;
+
+            case 'remove':
+                OmniTracker.getBotDataMessages(message)
+                .then(data => {
+                    let tracker = new OmniTracker(data);
+                    try {
+                        let characterName = command.groups.target.toLowerCase().replace(/'/g,"");
+                        let character = tracker.characters[characterName];
+                        if (!character) {
+                            throw new CharacterNotFoundError(characterName);
+                        }
+                        let propertyNamesToDelete = command.groups.properties.toLowerCase().matchAll(/(?<propertyName>\w+)/g);
+                        for (property of propertyNamesToDelete) {
+                            property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
+                            character.removeProperty(property.groups.propertyName);
+                            message.reply(`Removing property ${property.groups.propertyName} from character ${characterName}`).catch(err => {console.error(err)});
+                        }
+                    } catch (e) {
+                        if (!OmniTracker.handleCommonErrors(message, e)) {
+                            console.error(e);
+                        }
+                    }
+                    tracker.saveBotData();
+                    tracker.updateTrackers();
+                });
+                break;
 
         default:
             message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
