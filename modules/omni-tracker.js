@@ -211,6 +211,35 @@ class Character {
         return {result: math.compile(stuff).evaluate(), humanReadable: humanReadable};
     }
 
+    addProperty(propertiesString, message) {
+        const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
+        let properties = propertiesString.matchAll(propertiesRegex);
+        for (let property of properties) {
+            property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
+            let important = false;
+            if (property.groups.important)
+                important = true;
+            if (property.groups.propertyValue) {        //Is it a PropertyRange or just a Property?
+                if (property.groups.propertyValue.startsWith('=')) {
+                    property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
+                } else {
+                    let roller = new DiceRoller();
+                    property.groups.propertyValue = this.resolveReference(property.groups.propertyValue, roller).result;
+                    if (roller.log.length > 0) {
+                        message.reply(`${roller}`);
+                    }
+                }
+                this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
+                if (message)
+                    message.reply(`${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}`);
+            } else {
+                this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                if (message)
+                    message.reply(`${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}`);
+            }
+        }
+    }
+
     setHealth(currentHP, maxHP) {
         if (maxHP !== undefined)
             this.HP.maxValue = maxHP;
@@ -934,18 +963,7 @@ function handlePlayerCommands(command, message) {
                 }
                 let character = tracker.characters[characterName.toLowerCase()];
                 if (command.groups.properties) {
-                    var properties = command.groups.properties.matchAll(propertiesRegex);
-                    for (property of properties) {
-                        if (property.groups.propertyValue) {
-                            let roller = new DiceRoller();
-                            character.setProperty(property.groups.propertyName, character.resolveReference(property.groups.propertyValue, roller));
-                            if (roller.log.length > 0) {
-                                message.reply(`${roller}`);
-                            }
-                        } else {
-                            character.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                        }
-                    }
+                    character.addProperty(command.groups.properties);
                 }
                 tracker.saveBotData();
                 tracker.updateTrackers();
@@ -1134,31 +1152,9 @@ function handlePropertyCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.toLowerCase().replace(/'/g,"");
-                const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
+                
                 if (tracker.characters[characterName]) {
-                    var properties = command.groups.properties.matchAll(propertiesRegex);
-                    for (let property of properties) {
-                        property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
-                        let important = false;
-                        if (property.groups.important)
-                            important = true;
-                        if (property.groups.propertyValue) {
-                            if (property.groups.propertyValue.startsWith('=')) {
-                                property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
-                            } else {
-                                let roller = new DiceRoller();
-                                property.groups.propertyValue = tracker.characters[characterName].resolveReference(property.groups.propertyValue, roller).result;
-                                if (roller.log.length > 0) {
-                                    message.reply(`${roller}`);
-                                }
-                            }
-                            tracker.characters[characterName].setProperty(property.groups.propertyName, property.groups.propertyValue, important);
-                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
-                        } else {
-                            tracker.characters[characterName].setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                            message.reply(`${characterName} ${tracker.characters[characterName].properties[property.groups.propertyName.toLowerCase()]}`);
-                        }
-                    }
+                    tracker.characters[characterName].addProperty(command.groups.properties, message);
                     tracker.saveBotData();
                     tracker.updateTrackers();
                 } else {
