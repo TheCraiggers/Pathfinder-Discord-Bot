@@ -1305,8 +1305,13 @@ function handleInitNextCommand(message) {
                         }
                     }
                 }
-                tracker.increaseTimeForCharacter(6, tracker.characters[tracker.combatCurrentInit], message);        //each round is 6 seconds
-                message.channel.send(`Hey <@${tracker.characters[tracker.combatCurrentInit].owner}> it's your turn!`);
+                let suffix = "'s";
+                let character = tracker.characters[tracker.combatCurrentInit];
+                if (character.name.endsWith('s')) {
+                    suffix = "'";
+                }
+                tracker.increaseTimeForCharacter(6, character, message);        //each round is 6 seconds
+                message.channel.send(`Hey <@${character.owner}> it's ${character.name}${suffix} turn!`);
 
                 tracker.saveBotData();
                 tracker.updateTrackers();
