@@ -223,7 +223,11 @@ class Character {
         //After all that, are there words left? If so, resolve them
         let propertiesToEval = stuff.matchAll(Property.propertyReferencesRegex);
         for (const propertyToEval of propertiesToEval) {
-            let resolved = this.resolveReference(this.properties[propertyToEval[0].toLowerCase()].currentValue, roller, depth+1);
+            let property = this.properties[propertyToEval[0].toLowerCase()];
+            if (!property) {
+                throw new PropertyNotFoundError(propertyToEval[0], this.name);
+            }
+            let resolved = this.resolveReference(property.currentValue, roller, depth+1);
             humanReadable = humanReadable.replace(propertyToEval[0], resolved.humanReadable);   //I don't use parens here because it's less readable
             stuff = stuff.replace(propertyToEval[0], '(' + resolved.result + ')');
         }
@@ -1259,10 +1263,10 @@ function handleRollCommands(message) {
                 }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output.result);
-                    message.reply(`\`\`\`${roller}\n${command.groups.destinationStat} has been set to ${output.humanReadable} = ${output.result};${command.groups.rollComment}\`\`\``)
+                    message.reply(`\`\`\`${command.groups.destinationStat} has been set to ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
                     .catch(console.error);
                 } else {
-                    message.reply(`\`\`\`${roller}\n${command.groups.sourceStat} is ${output.humanReadable} = ${output.result};${command.groups.rollComment}\`\`\``)
+                    message.reply(`\`\`\`${command.groups.sourceStat} is ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
                     .catch(console.error);
                 }
                 tracker.saveBotData();
@@ -1305,8 +1309,13 @@ function handleInitNextCommand(message) {
                         }
                     }
                 }
-                tracker.increaseTimeForCharacter(6, tracker.characters[tracker.combatCurrentInit], message);        //each round is 6 seconds
-                message.channel.send(`Hey <@${tracker.characters[tracker.combatCurrentInit].owner}> it's your turn!`);
+                let suffix = "'s";
+                let character = tracker.characters[tracker.combatCurrentInit];
+                if (character.name.endsWith('s')) {
+                    suffix = "'";
+                }
+                tracker.increaseTimeForCharacter(6, character, message);        //each round is 6 seconds
+                message.channel.send(`Hey <@${character.owner}> it's ${character.name}${suffix} turn!`);
 
                 tracker.saveBotData();
                 tracker.updateTrackers();
