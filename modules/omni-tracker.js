@@ -249,7 +249,7 @@ class Character {
                 } else {
                     let roller = new DiceRoller();
                     property.groups.propertyValue = this.resolveReference(property.groups.propertyValue, roller).result;
-                    if (roller.log.length > 0) {
+                    if (roller.log.length > 0 && message) {
                         message.reply(`${roller}`);
                     }
                 }
@@ -425,7 +425,7 @@ class Enemy extends Character {
         } else if (percentage == 1) {
             return 'Healthy';
         } else {
-            return 'Error?';
+            return 'Unknown?';
         }
     }
 }
