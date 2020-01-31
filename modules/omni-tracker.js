@@ -61,8 +61,8 @@ GM Commands:
 !omni add time tracker 5 hours
 !omni set time tracker tomorrow             (Moves time forward until it's tomorrow morning)
 !omni set time tracker 13:00                (Moves time forward until it's 1pm)
-!omni set init Bob 15                       (Change Bob's initiative to 15)
-!omni set init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
+!omni set stat init Bob 15                       (Change Bob's initiative to 15)
+!omni set stat init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !next                                       (When in combat, move to next character's turn)
 \`\`\`
 `;
@@ -918,7 +918,7 @@ function handleTrackerCommands(command, message) {
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
                 let isGMTracker = false;
-                if (command.groups.properties == 'GM')
+                if (command.groups.properties.toLowerCase() == 'gm')
                     isGMTracker = true;
 
                 omniTracker = new OmniTracker(data);
