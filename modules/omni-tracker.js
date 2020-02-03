@@ -120,7 +120,7 @@ class Property {
             return new Property(json.propertyName, json.currentValue, json.isAboveFold, message)
         }
     }
-    constructor(name, currentValue, isAboveFold, dataMessage, character) {
+    constructor(name, currentValue, isAboveFold, character, dataMessage) {
         this.propertyName = name;
         this.currentValue = currentValue;
         this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
@@ -157,8 +157,8 @@ Property.propertyReferencesRegex = /(?<lookupReference>[a-zA-Z]+)/g;
 
 class PropertyRange extends Property {
     //Property ranges only make sense with numbers, so use *1 to force to a number of some sort;
-    constructor(name, currentValue, maxValue, isAboveFold, dataMessage, character) {
-        super(name, currentValue * 1, isAboveFold, dataMessage, character);
+    constructor(name, currentValue, maxValue, isAboveFold, character, dataMessage) {
+        super(name, currentValue * 1, isAboveFold, character, dataMessage);
         this.maxValue = maxValue * 1;
     }
     
@@ -185,6 +185,7 @@ class Character {
         this.properties = {};
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
+        this.HP = this.properties.hp;
     }
 
     save() {
@@ -243,9 +244,16 @@ class Character {
         return {result: math.compile(stuff).evaluate(), humanReadable: humanReadable};
     }
 
+    /**
+     * Used to add a new Property to a character. Not for instantiation of a property object!
+     * @param {String} propertiesString A space delimited list of properties to add. Usually at the end of a add new player/stat command.
+     * @param {Message} message A Discord message object that comtained the command.
+     */
     addProperty(propertiesString, message) {
         const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
         let properties = propertiesString.matchAll(propertiesRegex);
+        let reply = '';
+        let promises = [];
         for (let property of properties) {
             property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
             let important = false;
@@ -261,49 +269,66 @@ class Character {
                         message.reply(`${roller}`);
                     }
                 }
-                this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
+                let newProperty = this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
+                promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
                 if (message)
-                    message.reply(`${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}`);
+                    reply += `${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
             } else {
-                this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                if (message)
-                    message.reply(`${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}`);
+                let newProperty = this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                
             }
+            Promise.all(promises).then(results => {
+                if (reply) {
+                    message.reply(reply).catch(error => { console.error(error) });
+                }
+                    
+            })
         }
     }
 
     setHealth(currentHP, maxHP) {
+        let hp = this.properties['hp'];
         if (maxHP !== undefined)
-            this.HP.maxValue = maxHP;
-        else if (this.HP.maxValue == 0) {
-            this.HP.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
+            hp.maxValue = maxHP;
+        else if (hp.maxValue == 0) {
+            hp.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
         }
 
         if (currentHP < 0) {
             currentHP = 0;
-        } else if (currentHP > this.HP.maxValue) {
-            currentHP = this.HP.maxValue;
+        } else if (currentHP > hp.maxValue) {
+            currentHP = hp.maxValue;
         }
-        this.HP.currentValue = currentHP;
-        this.properties['hp'] = this.HP;
+        hp.currentValue = currentHP;
         
         return this;
     }
 
+    /**
+     * Sets the existing property on a character to a new value. Automatically forces to lowercase and resolves aliases.
+     * 
+     * @param {String} propertyName Name of the property to set. It will be forced to lowercase automatically.
+     * @param {*} value Value to set the property to.
+     * @param {Boolean} isAboveFold Should this property always be displayed on the tracker?
+     * @returns {Property}
+     */
     setProperty(propertyName, value, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
             case 'hp':
-                this.setHealth(value);
+                if (this.properties['hp']) {
+                    return this.setHealth(value);
+                } else {
+                    return this.properties['hp'] = new PropertyRange(propertyName, value, value, true, this);    
+                }
                 break;
             case 'initiative':
-                this.properties['initiative'] = new Property('initiative', value);
+                return this.properties['initiative'] = new Property('initiative', value,isAboveFold, this);
                 break;
             default:
-                this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold);
+                return this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold, this);
         }
-        
-        return this;
     }
 
     showCharacterSynopsis(channel) {
@@ -311,7 +336,7 @@ class Character {
         if (this.enemy) {
             output += `${this.name}: <${this.getAmbiguousHP()}>`;
         } else {
-            output += `${this.name}: ${this.HP.currentValue}/${this.HP.maxValue}`;
+            output += `${this.name}: ${this.properties['hp'].currentValue}/${this.properties['hp'].maxValue}`;
         }
 
         for (var propertyName of Object.keys(this.properties)) {
@@ -331,10 +356,10 @@ class Character {
 
     setPropertyRange(propertyName, currentValue, maxValue, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
-        if (propertyName.toUpperCase() == 'HP')
+        if (propertyName.toUpperCase() == 'HP' && this.properties['hp]'])
             this.setHealth(currentValue,maxValue);
         else 
-            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold);
+            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this);
         return this;
     }
 
@@ -513,7 +538,7 @@ class OmniTracker {
                 case 'OmniTracker':
                     this.time = new Moment(data.date).utc();
                     this.combatCurrentInit = data.combatCurrentInit;
-                    this.omniDataMessage = data.message;
+                    this.omniDataMessage = data.dataMessage;
                     break;
             }
         }
@@ -817,7 +842,7 @@ class OmniTracker {
             output += `${character.name}:`;
             if (character.properties['hp']) {
                 if (character.enemy == false || isGMTracker) {
-                    output += ` ${character.HP.currentValue}/${character.HP.maxValue}`;
+                    output += ` ${character.properties['hp'].currentValue}/${character.properties['hp'].maxValue}`;
                 } else {
                     output += ` <${character.getAmbiguousHP()}>`;
                 }
