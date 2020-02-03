@@ -93,6 +93,9 @@ module.exports = (client) => { return new OmniPlugin(client) }
 //Custom errors to aid in error messages back to users
 class OmniError extends Error {
     constructor(message) {
+        if (!message) {
+            message = "An unknown error occurred. Check your command syntax. If you're sure it's right, contact the bot administrator.";
+        }
         super(message);
         this.name = this.constructor.name;
     }
@@ -111,10 +114,29 @@ class PropertyNotFoundError extends OmniError {
 }
 
 class Property {
-    constructor(name, currentValue, isAboveFold) {
+    static importPropertyFromMessage(message) {
+        let json = JSON.parse(message.content);
+        if (json) {
+            return new Property(json.propertyName, json.currentValue, json.isAboveFold, message)
+        }
+    }
+    constructor(name, currentValue, isAboveFold, dataMessage, character) {
         this.propertyName = name;
         this.currentValue = currentValue;
         this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
+        this.dataMessage = dataMessage;
+        this.character = character.name;
+    }
+
+    save() {
+        return this.dataMessage.edit(JSON.stringify(this));
+    }
+
+    toJSON() {
+        let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
+        delete foo.dataMessage;             //Messages have circular references in them and we don't need them to be saved anyway.
+        foo.type = "Property";
+        return foo;
     }
     
     toString = function() {
@@ -135,8 +157,8 @@ Property.propertyReferencesRegex = /(?<lookupReference>[a-zA-Z]+)/g;
 
 class PropertyRange extends Property {
     //Property ranges only make sense with numbers, so use *1 to force to a number of some sort;
-    constructor(name, currentValue, maxValue, isAboveFold) {
-        super(name, currentValue * 1, isAboveFold);
+    constructor(name, currentValue, maxValue, isAboveFold, dataMessage, character) {
+        super(name, currentValue * 1, isAboveFold, dataMessage, character);
         this.maxValue = maxValue * 1;
     }
     
@@ -175,21 +197,28 @@ class Character {
         return newCharacter;
     }
 
-    constructor(name, owner, currentHP, maxHP, dataMessage) {
+    constructor({name = undefined, owner = undefined, currentHP = undefined, maxHP = undefined, dataMessage = undefined}) {
         this.name = name;
         this.owner = owner;
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
         this.properties = {};
-        this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later. Plus it shouldn't ever be removed.
+        this.HP = new PropertyRange('HP',currentHP, maxHP, false, undefined, this);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later. Plus it shouldn't ever be removed.
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
+    }
+
+    save() {
+        return this.dataMessage.edit(this.toJSON());
     }
 
     toJSON() {
         let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
         foo.type = 'Character';
-        foo.dataMessage = null;     //Discord message objects contain circular references that trip up JSON.stringify and we don't need to save all that garbage anyway.
+        delete foo.dataMessage;     //Discord message objects contain circular references that trip up JSON.stringify and we don't need to save all that garbage anyway.
+        delete foo.properties;      //These have their own save functions
+        delete foo.effects;
+        delete foo.linkedCharacters;
         return foo;
     }
 
@@ -400,16 +429,18 @@ function getDurationText(duration) {
 }
 
 class Player extends Character {
-    constructor(name,owner,currentHP,maxHP, dataMessage) {
-        super(name, owner, currentHP,maxHP, dataMessage);
+    constructor({name = undefined, owner = undefined, currentHP = undefined, maxHP = undefined, dataMessage = undefined}) {
+        super({name: name, owner: owner, currentHP: currentHP, maxHP: maxHP, dataMessage: dataMessage});
         this.enemy = false;
+        this.type = 'Player';
     }
 }
 
 class Enemy extends Character {
-    constructor(name,owner,currentHP,maxHP,dataMessage) {
-        super(name, owner, currentHP,maxHP,dataMessage);
+    constructor({name = undefined, owner = undefined, currentHP = undefined, maxHP = undefined, dataMessage = undefined}) {
+        super({name: name, owner: owner, currentHP: currentHP, maxHP: maxHP, dataMessage: dataMessage});
         this.enemy = true;
+        this.type = 'Enemy';
     }
 
     getAmbiguousHP() {
@@ -465,28 +496,39 @@ class OmniTracker {
         });
     }
 
+    /**
+     * 
+     * @param {Message} message Discord message that contains the command that generated the error
+     * @param {Error} error If error is an OmniError type, this will message the user with a proper user-facing error message. Otherwise, a generic error message will be sent.
+     */
     static handleCommonErrors(message, error) {
         if (error instanceof OmniError) {
             message.reply(error.message).catch(err => {console.error(err)});
-            return true;
         } else {
-            return false;
+            console.error(error);
+            message.reply("Sorry, an unknown error occurred. Please check your command syntax.").catch(err => {console.error(err)});
         }
     }
 
     constructor (botData) {
-        this.characters = {};
         this.time;
+        this.characters = [];
         this.combatCurrentInit = null;
         this.omniDataMessage = botData.omniData;
         this.combatDataMessage = botData.combatData;
 
+        //We need to create the Character objects first since everything plugs into that
+        let charactersToImport = botData.filter(datum => datum.type == 'Character');
+        for (const characterToImport of charactersToImport) {
+            this.characters[data.name.toLowerCase()] = Character.importJSON(data.message);
+            if (this.characters[data.name.toLowerCase()].properties['initiative'])
+                this.combat = true;
+        }
+
         for (const data of botData) {
             switch (data.type) {
-                case 'Character':
-                    this.characters[data.name.toLowerCase()] = Character.importJSON(data);
-                    if (this.characters[data.name.toLowerCase()].properties['initiative'])
-                        this.combat = true;
+                case 'Property':
+                        this.characters[data.character].properties[data.name] = Property.importPropertyFromMessage(data);
                     break;
                 case 'OmniTracker':
                     this.time = new Moment(data.date).utc();
@@ -616,6 +658,34 @@ class OmniTracker {
             }
         });
     }
+    /**
+     * Used for actually adding a new char into the game, not just instantiating an object!
+     * @param {String} name 
+     * @param {String} owner 
+     * @param {Character} characterClass 
+     * @returns {Character} A promise for a new character of type characterType
+     * @throws {OmniError}
+     */
+    addNewCharacter(name, owner, characterClass) {
+        var tracker = this;
+        return new Promise(function(resolve, reject) {
+            if (characterClass.prototype instanceof Character) {
+                let newCharacter = new characterClass({name: name, owner: owner, currentHP: 0, maxHP: 0});
+                tracker.omniDataMessage.channel.send(JSON.stringify(newCharacter))
+                .then(newCharacterDataMessage => {
+                    newCharacter.dataMessage = newCharacterDataMessage;
+                    tracker.characters[name.toLowerCase()] = newCharacter;
+                    resolve(newCharacter);
+                })
+                .catch(error => {
+                    console.error(error);
+                    reject(new OmniError());
+                })
+            } else {
+                throw "Invalid character type."
+            }
+        });
+    }
 
     increaseTimeForCharacter(increaseInSeconds, character, message) {
         //Combat is weird in that while a round is 6 seconds, effects don't end at the end of the round, rather the start of the character turn.
@@ -682,6 +752,7 @@ class OmniTracker {
 
     saveBotData() {
         //Saves the data to the bot channel
+        return;
         this.omniDataMessage.edit(JSON.stringify(this))
         .catch(console.error);
 
@@ -995,25 +1066,27 @@ function handlePlayerCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace(/'/g,"");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\S+))/g;
+
                 if (command.groups.noun == 'player') {
-                    tracker.characters[characterName.toLowerCase()] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
+                    var characterType = Player;
                 } else if (command.groups.noun == 'enemy') {
                     gmOnlyCommand();
-                    tracker.characters[characterName.toLowerCase()] = new Enemy(characterName, message.author.id, 0, 0);
+                    var characterType = Enemy;
+                } else {
+                    throw new OmniError("Invalid command. Need to specify if you're adding a Player or an Enemy!");
                 }
-                let character = tracker.characters[characterName.toLowerCase()];
-                if (command.groups.properties) {
-                    character.addProperty(command.groups.properties);
-                }
-                tracker.saveBotData();
-                tracker.updateTrackers();
-                message.reply(`Added new character ${characterName}`);
-                tracker.characters[characterName.toLowerCase()].showCharacterSynopsis(message.channel);
+                tracker.addNewCharacter(characterName, message.author.id, characterType)
+                .then(newCharacter => {
+                    if (command.groups.properties) {
+                        newCharacter.addProperty(command.groups.properties);
+                    }
+                    tracker.updateTrackers();
+                    message.reply(`Added new character ${characterName}`);
+                    tracker.characters[characterName.toLowerCase()].showCharacterSynopsis(message.channel);
+                })    
             })
             .catch(error => {
-                message.reply('Sorry, there was an error. Check your syntax!');
-                console.error(error);
+                OmniTracker.handleCommonErrors(message, error);
             });
             break;
         case 'show':
@@ -1227,9 +1300,7 @@ function handlePropertyCommands(command, message) {
                             message.reply(`Removing property ${property.groups.propertyName} from character ${characterName}`).catch(err => {console.error(err)});
                         }
                     } catch (e) {
-                        if (!OmniTracker.handleCommonErrors(message, e)) {
-                            console.error(e);
-                        }
+                        OmniTracker.handleCommonErrors(message, e);
                     }
                     tracker.saveBotData();
                     tracker.updateTrackers();
