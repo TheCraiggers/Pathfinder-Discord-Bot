@@ -170,30 +170,10 @@ class PropertyRange extends Property {
 class Character {
     static importJSON(character) {
         if (character.enemy) {
-            var newCharacter = new Enemy(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+            var newCharacter = new Enemy(character);
         } else {
-            var newCharacter = new Player(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+            var newCharacter = new Player(character);
         }
-
-        //Properties
-        var keys = Object.keys(character.properties);
-        for (let i = 0; i < keys.length; i++) {
-            const property = character.properties[keys[i]];
-            if (property.maxValue)
-                newCharacter.properties[property.propertyName.toLowerCase()] = new PropertyRange(property.propertyName, property.currentValue, property.maxValue, property.isAboveFold);
-            else
-                newCharacter.properties[property.propertyName.toLowerCase()] = new Property(property.propertyName, property.currentValue, property.isAboveFold);
-        }
-
-        //Effects
-        var keys = Object.keys(character.effects);
-        for (let i = 0; i < keys.length; i++) {
-            let effect = character.effects[keys[i]];
-            if (effect.duration == null)
-                effect.duration = Infinity;
-            newCharacter.effects[keys[i].toLowerCase()] = effect;
-        }
-
         return newCharacter;
     }
 
@@ -203,7 +183,6 @@ class Character {
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
         this.properties = {};
-        this.HP = new PropertyRange('HP',currentHP, maxHP, false, undefined, this);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later. Plus it shouldn't ever be removed.
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
     }
@@ -474,7 +453,7 @@ class OmniTracker {
                     let botDatum = [];
                     for (const msg of messages) {
                         let data = JSON.parse(msg[1].content);
-                        data.message = msg[1];
+                        data.dataMessage = msg[1];
                         botDatum.push(data);
                         if (data.type == 'OmniTracker')
                             var omniData = true;
@@ -520,15 +499,16 @@ class OmniTracker {
         //We need to create the Character objects first since everything plugs into that
         let charactersToImport = botData.filter(datum => datum.type == 'Character');
         for (const characterToImport of charactersToImport) {
-            this.characters[data.name.toLowerCase()] = Character.importJSON(data.message);
-            if (this.characters[data.name.toLowerCase()].properties['initiative'])
-                this.combat = true;
+            this.characters[characterToImport.name.toLowerCase()] = Character.importJSON(characterToImport);
         }
 
         for (const data of botData) {
             switch (data.type) {
                 case 'Property':
                         this.characters[data.character].properties[data.name] = Property.importPropertyFromMessage(data);
+                        if (data.name == 'initiative') {
+                            this.combat = true;
+                        }
                     break;
                 case 'OmniTracker':
                     this.time = new Moment(data.date).utc();
@@ -834,10 +814,13 @@ class OmniTracker {
                     output += `  ${init} | `;
                 }
             }
-            if (character.enemy == false || isGMTracker) {
-                output += `${character.name}: ${character.HP.currentValue}/${character.HP.maxValue}`;
-            } else {
-                output += `${character.name}: <${character.getAmbiguousHP()}>`;
+            output += `${character.name}:`;
+            if (character.properties['hp']) {
+                if (character.enemy == false || isGMTracker) {
+                    output += ` ${character.HP.currentValue}/${character.HP.maxValue}`;
+                } else {
+                    output += ` <${character.getAmbiguousHP()}>`;
+                }
             }
 
             for (var propertyName of Object.keys(character.properties)) {
