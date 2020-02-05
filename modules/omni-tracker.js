@@ -115,7 +115,7 @@ class PropertyNotFoundError extends OmniError {
 
 class Property {
     static importPropertyFromMessage(message) {
-        let json = JSON.parse(message.content);
+        let json = JSON.parse(message);
         if (json) {
             return new Property(json.propertyName, json.currentValue, json.isAboveFold, message)
         }
@@ -185,11 +185,11 @@ class Character {
         this.properties = {};
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
-        this.HP = this.properties.hp;
+        this.HP = {currentValue: currentHP, maxValue: maxHP};
     }
 
     save() {
-        return this.dataMessage.edit(this.toJSON());
+        return this.dataMessage.edit(JSON.stringify(this));
     }
 
     toJSON() {
@@ -261,7 +261,7 @@ class Character {
                 important = true;
             if (property.groups.propertyValue) {        //Is it a PropertyRange or just a Property?
                 if (property.groups.propertyValue.startsWith('=')) {
-                    property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
+                    property.groups.propertyValue = property.groups.propertyValue.replace('=','');   //Dynamic stats are set as is- no resolving.
                 } else {
                     let roller = new DiceRoller();
                     property.groups.propertyValue = this.resolveReference(property.groups.propertyValue, roller).result;
@@ -270,12 +270,16 @@ class Character {
                     }
                 }
                 let newProperty = this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
-                promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                if (newProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
+                    promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                }
                 if (message)
                     reply += `${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
             } else {
                 let newProperty = this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                if (newProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
+                    promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                }
                 
             }
             Promise.all(promises).then(results => {
@@ -288,19 +292,19 @@ class Character {
     }
 
     setHealth(currentHP, maxHP) {
-        let hp = this.properties['hp'];
         if (maxHP !== undefined)
-            hp.maxValue = maxHP;
-        else if (hp.maxValue == 0) {
-            hp.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
+            this.HP.maxValue = maxHP;
+        else if (this.HP.maxValue == 0) {
+            this.HP.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
         }
 
         if (currentHP < 0) {
             currentHP = 0;
-        } else if (currentHP > hp.maxValue) {
-            currentHP = hp.maxValue;
+        } else if (currentHP > this.HP.maxValue) {
+            currentHP = this.HP.maxValue;
         }
-        hp.currentValue = currentHP;
+        this.HP.currentValue = currentHP;
+        this.save();
         
         return this;
     }
@@ -317,11 +321,7 @@ class Character {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
             case 'hp':
-                if (this.properties['hp']) {
-                    return this.setHealth(value);
-                } else {
-                    return this.properties['hp'] = new PropertyRange(propertyName, value, value, true, this);    
-                }
+                return this.setHealth(value);
                 break;
             case 'initiative':
                 return this.properties['initiative'] = new Property('initiative', value,isAboveFold, this);
@@ -336,7 +336,7 @@ class Character {
         if (this.enemy) {
             output += `${this.name}: <${this.getAmbiguousHP()}>`;
         } else {
-            output += `${this.name}: ${this.properties['hp'].currentValue}/${this.properties['hp'].maxValue}`;
+            output += `${this.name}: ${this.HP.currentValue}/${this.HP.maxValue}`;
         }
 
         for (var propertyName of Object.keys(this.properties)) {
@@ -356,11 +356,12 @@ class Character {
 
     setPropertyRange(propertyName, currentValue, maxValue, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
-        if (propertyName.toUpperCase() == 'HP' && this.properties['hp]'])
+        if (propertyName.toUpperCase() == 'HP') {
             this.setHealth(currentValue,maxValue);
-        else 
-            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this);
-        return this;
+            return null;
+        } else {
+            return this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this);
+        }
     }
 
     removeProperty(propertyName) {
@@ -477,7 +478,7 @@ class OmniTracker {
                 .then(function(messages) {
                     let botDatum = [];
                     for (const msg of messages) {
-                        let data = JSON.parse(msg[1].content);
+                        let data = JSON.parse(msg[1].content); //TODO: let class functions parse their JSON
                         data.dataMessage = msg[1];
                         botDatum.push(data);
                         if (data.type == 'OmniTracker')
@@ -840,9 +841,9 @@ class OmniTracker {
                 }
             }
             output += `${character.name}:`;
-            if (character.properties['hp']) {
+            if (character.HP) {
                 if (character.enemy == false || isGMTracker) {
-                    output += ` ${character.properties['hp'].currentValue}/${character.properties['hp'].maxValue}`;
+                    output += ` ${character.HP.currentValue}/${character.HP.maxValue}`;
                 } else {
                     output += ` <${character.getAmbiguousHP()}>`;
                 }
