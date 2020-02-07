@@ -114,18 +114,20 @@ class PropertyNotFoundError extends OmniError {
 }
 
 class Property {
-    static importPropertyFromMessage(message) {
-        let json = JSON.parse(message);
-        if (json) {
-            return new Property(json.propertyName, json.currentValue, json.isAboveFold, message)
-        }
+    /**
+     * Given a parsed JSON message of a saved Property object, returns a new Property object.
+     * @param {Object} botData A parsed JSON object from a property message.
+     * @returns {Property}
+     */
+    static newPropertyFromBotData(botData) {
+        return new Property(botData.propertyName, botData.currentValue, botData.isAboveFold, botData.character);
     }
-    constructor(name, currentValue, isAboveFold, character, dataMessage) {
+    constructor(name, currentValue, isAboveFold, characterName, dataMessage) {
         this.propertyName = name;
         this.currentValue = currentValue;
         this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
         this.dataMessage = dataMessage;
-        this.character = character.name;
+        this.character = characterName;
     }
 
     save() {
@@ -177,7 +179,7 @@ class Character {
         return newCharacter;
     }
 
-    constructor({name = undefined, owner = undefined, currentHP = undefined, maxHP = undefined, dataMessage = undefined}) {
+    constructor({name = undefined, owner = undefined, HP = undefined, dataMessage = undefined}) {
         this.name = name;
         this.owner = owner;
         this.indent = ' '.repeat(name.length + 1);
@@ -185,7 +187,7 @@ class Character {
         this.properties = {};
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
-        this.HP = {currentValue: currentHP, maxValue: maxHP};
+        this.HP = HP;
     }
 
     save() {
@@ -434,16 +436,16 @@ function getDurationText(duration) {
 }
 
 class Player extends Character {
-    constructor({name = undefined, owner = undefined, currentHP = undefined, maxHP = undefined, dataMessage = undefined}) {
-        super({name: name, owner: owner, currentHP: currentHP, maxHP: maxHP, dataMessage: dataMessage});
+    constructor({name = undefined, owner = undefined, HP = undefined, dataMessage = undefined}) {
+        super({name: name, owner: owner, HP: HP, dataMessage: dataMessage});
         this.enemy = false;
         this.type = 'Player';
     }
 }
 
 class Enemy extends Character {
-    constructor({name = undefined, owner = undefined, currentHP = undefined, maxHP = undefined, dataMessage = undefined}) {
-        super({name: name, owner: owner, currentHP: currentHP, maxHP: maxHP, dataMessage: dataMessage});
+    constructor({name = undefined, owner = undefined, HP = undefined, dataMessage = undefined}) {
+        super({name: name, owner: owner, HP: HP, dataMessage: dataMessage});
         this.enemy = true;
         this.type = 'Enemy';
     }
@@ -531,7 +533,7 @@ class OmniTracker {
         for (const data of botData) {
             switch (data.type) {
                 case 'Property':
-                        this.characters[data.character].properties[data.name] = Property.importPropertyFromMessage(data);
+                        this.characters[data.character].properties[data.propertyName] = Property.newPropertyFromBotData(data);
                         if (data.name == 'initiative') {
                             this.combat = true;
                         }
@@ -676,7 +678,7 @@ class OmniTracker {
         var tracker = this;
         return new Promise(function(resolve, reject) {
             if (characterClass.prototype instanceof Character) {
-                let newCharacter = new characterClass({name: name, owner: owner, currentHP: 0, maxHP: 0});
+                let newCharacter = new characterClass({name: name, owner: owner, HP: {currentHP: 0, maxHP: 0}});
                 tracker.omniDataMessage.channel.send(JSON.stringify(newCharacter))
                 .then(newCharacterDataMessage => {
                     newCharacter.dataMessage = newCharacterDataMessage;
