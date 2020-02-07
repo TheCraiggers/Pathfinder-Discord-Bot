@@ -177,8 +177,79 @@ class Effect {
     constructor({effectName = undefined, affectedCharacterName = undefined, durationInSeconds = undefined, dataMessage = undefined}) {
         this.effectName = effectName;
         this.affectedCharacterName = affectedCharacterName;
-        this.durationInSeconds = durationInSeconds;
         this.dataMessage = dataMessage;
+        if (durationInSeconds) {
+            this.durationInSeconds = durationInSeconds;
+        } else {
+            this.durationInSeconds = Infinity;
+        }
+    }
+
+    save() {
+        return this.dataMessage.edit(JSON.stringify(this));
+    }
+
+    toJSON() {
+        let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
+        delete foo.dataMessage;             //Messages have circular references in them and we don't need them to be saved anyway.
+        foo.type = "Effect";
+        return foo;
+    }
+
+    /**
+     * Takes a human readable duration string and translates it into a number of seconds
+     * @param {String} durationString A human readable representation of a dutation such as '1 day'
+     * @returns {Number} Number of seconds the duration string represents
+     */
+    static translateDurationStringToSeconds(durationString) {
+        var durationInSeconds = 0;
+        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/gi;
+        const durations = durationString.matchAll(durationRegex);
+        for (const duration of durations) {
+            switch (duration.groups.durationUnits) {
+                case 'round':
+                    durationInSeconds =+ duration.groups.duration * 6;
+                    break;
+                case 'min':
+                case 'minute':
+                    durationInSeconds =+ duration.groups.duration * 60;
+                    break;
+                case 'hour':
+                    durationInSeconds =+ duration.groups.duration * 3600;
+                    break;
+                case 'day':
+                    durationInSeconds =+ duration.groups.duration * 86400;
+                    break;
+                case 'week':
+                    durationInSeconds =+ duration.groups.duration * 604800;
+                    break;
+                default:
+                    console.error("Somehow got an invalid durationUnit past regex!");
+            }
+        }
+        if (durationInSeconds == 0) {
+            durationInSeconds = Infinity;       //This means no duration was set, so it'll last until removed.
+        }
+        return durationInSeconds;
+        
+    }
+    
+    getDurationText() {
+        if (this.durationInSeconds === Infinity) {
+            return '';
+        } else if (this.durationInSeconds >= 86400) {
+            var foo = Math.round(this.durationInSeconds/86400);
+            return `${foo} day${(foo>1) ? 's':''}`;
+        } else if (this.durationInSeconds >= 3600) {
+            var foo = Math.round(this.durationInSeconds/3600);
+            return `${foo} hour${(foo>1) ? 's':''}`;
+        } else if (this.durationInSeconds >= 60) {
+            var foo = Math.round(this.durationInSeconds/60);
+            return `${foo} minute${(foo>1) ? 's':''}`;
+        } else {
+            var foo = Math.round(this.durationInSeconds/6);
+            return `${foo} round${(foo>1) ? 's':''}`;
+        }
     }
 }
 
@@ -363,7 +434,7 @@ class Character {
         output += '\n';
         for (var effectName of Object.keys(this.effects)) {
             var effect = this.effects[effectName];
-            output += `${this.indent} ${effect.name} ${[getDurationText(effect.duration)]}\n`;
+            output += `${this.indent} ${effect.effectName} ${effect.getDurationText()}\n`;
         }
         output += '```';
         return channel.send(output);
@@ -392,59 +463,29 @@ class Character {
         return this;
     }
 
+    /**
+     * Adds a new effect to a character, or increases the duration of an existing Effect.
+     * @param {String} effectName Name of the effect, such as Confused.
+     * @param {String} durationString A human-readable representation of a duration such as "1 round" or "1 day". Leave blank for infinity.
+     * @returns {Effect}
+     */
     addEffect(effectName, durationString) {
-        var durationInSeconds = 0;
-        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/gi;
-        const durations = durationString.matchAll(durationRegex);
-        for (const duration of durations) {
-            switch (duration.groups.durationUnits) {
-                case 'round':
-                    durationInSeconds =+ duration.groups.duration * 6;
-                    break;
-                case 'min':
-                case 'minute':
-                    durationInSeconds =+ duration.groups.duration * 60;
-                    break;
-                case 'hour':
-                    durationInSeconds =+ duration.groups.duration * 3600;
-                    break;
-                case 'day':
-                    durationInSeconds =+ duration.groups.duration * 86400;
-                    break;
-                case 'week':
-                    durationInSeconds =+ duration.groups.duration * 604800;
-                    break;
-                default:
-                    console.error("Somehow got an invalid durationUnit past regex!");
-            }
-        }
-        if (durationInSeconds == 0)
-            durationInSeconds = Infinity;       //This means no duration was set, so it'll last until removed.
-
-        if (this.effects[effectName.toLowerCase()]) {
+        let durationInSeconds = Effect.translateDurationStringToSeconds(durationString);
+        let existingEffect = this.effects[effectName.toLowerCase()];
+        if (existingEffect) {
             //Effect already exists. Compare durations. Highest duration stays
-            this.effects[effectName.toLowerCase()].duration = Math.max(this.effects[effectName.toLowerCase()].duration, durationInSeconds);
+            if (existingEffect.durationInSeconds < durationInSeconds) {
+                existingEffect.durationInSeconds = durationInSeconds;
+                existingEffect.save();
+            }
+            return existingEffect;
         } else {
-            this.effects[effectName.toLowerCase()] = {name: effectName, duration: durationInSeconds};
+            let newEffect = this.effects[effectName.toLowerCase()] = new Effect({effectName: effectName, durationInSeconds: durationInSeconds, affectedCharacterName: this.name});
+            this.dataMessage.channel.send(JSON.stringify(newEffect)).then(msg => {
+                newEffect.dataMessage = msg;
+                return newEffect;
+            })
         }
-    }
-}
-
-function getDurationText(duration) {
-    if (duration === Infinity) {
-        return '';
-    } else if (duration >= 86400) {
-        var foo = Math.round(duration/86400);
-        return `${foo} day${(foo>1) ? 's':''}`;
-    } else if (duration >= 3600) {
-        var foo = Math.round(duration/3600);
-        return `${foo} hour${(foo>1) ? 's':''}`;
-    } else if (duration >= 60) {
-        var foo = Math.round(duration/60);
-        return `${foo} minute${(foo>1) ? 's':''}`;
-    } else {
-        var foo = Math.round(duration/6);
-        return `${foo} round${(foo>1) ? 's':''}`;
     }
 }
 
@@ -546,11 +587,15 @@ class OmniTracker {
         for (const data of botData) {
             switch (data.type) {
                 case 'Property':
-                        this.characters[data.character].properties[data.propertyName] = Property.newPropertyFromBotData(data);
-                        if (data.name == 'initiative') {
-                            this.combat = true;
-                        }
+                    this.characters[data.character].properties[data.propertyName.toLowerCase()] = Property.newPropertyFromBotData(data);
+                    if (data.name == 'initiative') {
+                        this.combat = true;
+                    }
                     break;
+                case 'Effect':
+                    this.characters[data.affectedCharacterName].effects[data.effectName.toLowerCase()] = Effect.importFromBotData(data);
+                    break;
+    
                 case 'OmniTracker':
                     this.time = new Moment(data.date).utc();
                     this.combatCurrentInit = data.combatCurrentInit;
@@ -873,7 +918,7 @@ class OmniTracker {
             output += '\n';
             for (var effectName of Object.keys(character.effects)) {
                 var effect = character.effects[effectName];
-                output += `${combatIndent}${character.indent} ${effect.name} ${[getDurationText(effect.duration)]}\n`;
+                output += `${combatIndent}${character.indent} ${effect.effectName} ${effect.getDurationText()}\n`;
             }
             
         }
@@ -1157,6 +1202,7 @@ function handleEffectCommands(command, message) {
 
                 let effect = command.groups.properties.match(effectRegex);
                 if (effect) {
+                    effect.groups.effectName = effect.groups.effectName.replace(/'/g,"");
                     switch (command.groups.target.toLowerCase()) {
                         case '%players':
                             for (characterName in tracker.characters) {
