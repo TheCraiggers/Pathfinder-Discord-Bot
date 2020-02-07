@@ -169,12 +169,25 @@ class PropertyRange extends Property {
     }
 }
 
+class Effect {
+    static importFromBotData(botData) {
+        return new Effect(botData);
+    }
+
+    constructor({effectName = undefined, affectedCharacterName = undefined, durationInSeconds = undefined, dataMessage = undefined}) {
+        this.effectName = effectName;
+        this.affectedCharacterName = affectedCharacterName;
+        this.durationInSeconds = durationInSeconds;
+        this.dataMessage = dataMessage;
+    }
+}
+
 class Character {
-    static importJSON(character) {
-        if (character.enemy) {
-            var newCharacter = new Enemy(character);
+    static importFromBotData(botData) {
+        if (botData.enemy) {
+            var newCharacter = new Enemy(botData);
         } else {
-            var newCharacter = new Player(character);
+            var newCharacter = new Player(botData);
         }
         return newCharacter;
     }
@@ -527,7 +540,7 @@ class OmniTracker {
         //We need to create the Character objects first since everything plugs into that
         let charactersToImport = botData.filter(datum => datum.type == 'Character');
         for (const characterToImport of charactersToImport) {
-            this.characters[characterToImport.name.toLowerCase()] = Character.importJSON(characterToImport);
+            this.characters[characterToImport.name.toLowerCase()] = Character.importFromBotData(characterToImport);
         }
 
         for (const data of botData) {
