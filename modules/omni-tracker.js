@@ -292,7 +292,6 @@ class Character {
     delete() {
         return this.dataMessage.delete().then(msg => {
             //Now that the player is deleted, clean up any remaining data messages they had
-            console.log(msg);
             for (const property in this.properties) {
                 this.properties[property].delete();
             }
@@ -396,7 +395,12 @@ class Character {
             }
             Promise.all(promises).then(results => {
                 if (reply) {
-                    message.reply(reply).catch(error => { console.error(error) });
+                    message.reply(reply).then(msg => {
+                        msg.delete(20000)
+                    }).catch(error => { 
+                        console.error(error) 
+                    });
+                    reply = undefined;      //Sometimes this would fire twice, this at least unsures there's new messages.
                 }
                     
             })
@@ -405,17 +409,17 @@ class Character {
 
     setHealth(currentHP, maxHP) {
         if (maxHP !== undefined)
-            this.HP.maxValue = maxHP;
-        else if (this.HP.maxValue == 0) {
-            this.HP.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
+            this.HP.maxHP = maxHP;
+        else if (this.HP.maxHP == 0) {
+            this.HP.maxHP = currentHP;       //Shortcut for new character creation so you can just say HP:300
         }
 
         if (currentHP < 0) {
             currentHP = 0;
-        } else if (currentHP > this.HP.maxValue) {
-            currentHP = this.HP.maxValue;
+        } else if (currentHP > this.HP.maxHP) {
+            currentHP = this.HP.maxHP;
         }
-        this.HP.currentValue = currentHP;
+        this.HP.currentHP = currentHP;
         this.save();
         
         return this;
@@ -427,13 +431,13 @@ class Character {
      * @param {String} propertyName Name of the property to set. It will be forced to lowercase automatically.
      * @param {*} value Value to set the property to.
      * @param {Boolean} isAboveFold Should this property always be displayed on the tracker?
-     * @returns {Property}
+     * @returns {Property} Property
      */
     setProperty(propertyName, value, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
             case 'hp':
-                return this.setHealth(value);
+                this.setHealth(value);
                 break;
             case 'initiative':
                 return this.properties['initiative'] = new Property('initiative', value,isAboveFold, this.name);
@@ -448,7 +452,7 @@ class Character {
         if (this.enemy) {
             output += `${this.name}: <${this.getAmbiguousHP()}>`;
         } else {
-            output += `${this.name}: ${this.HP.currentValue}/${this.HP.maxValue}`;
+            output += `${this.name}: ${this.HP.currentHP}/${this.HP.maxHP}`;
         }
 
         for (var propertyName of Object.keys(this.properties)) {
@@ -533,18 +537,23 @@ class Enemy extends Character {
     }
 
     getAmbiguousHP() {
-        var percentage = this.HP.currentValue/this.HP.maxValue;
-        if (percentage <= 0) {
-            return 'Dead';
-        } else if (percentage < .15) {
-            return 'Critical';
-        } else if (percentage < .5) {
-            return 'Bloodied';
-        } else if (percentage < 1) {
-            return 'Injured';
-        } else if (percentage == 1) {
-            return 'Healthy';
+        if (this.HP.maxHP) {
+            let percentage = this.HP.currentHP/this.HP.maxHP;
+            if (percentage <= 0) {
+                return 'Dead';
+            } else if (percentage < .15) {
+                return 'Critical';
+            } else if (percentage < .5) {
+                return 'Bloodied';
+            } else if (percentage < 1) {
+                return 'Injured';
+            } else if (percentage == 1) {
+                return 'Healthy';
+            } else {
+                return 'Unknown?';
+            }
         } else {
+            //Don't want to end the universe by trying to divide by 0
             return 'Unknown?';
         }
     }
@@ -935,7 +944,7 @@ class OmniTracker {
             output += `${character.name}:`;
             if (character.HP) {
                 if (character.enemy == false || isGMTracker) {
-                    output += ` ${character.HP.currentValue}/${character.HP.maxValue}`;
+                    output += ` ${character.HP.currentHP}/${character.HP.maxHP}`;
                 } else {
                     output += ` <${character.getAmbiguousHP()}>`;
                 }
@@ -1175,6 +1184,10 @@ function handlePlayerCommands(command, message) {
                     var characterType = Enemy;
                 } else {
                     throw new OmniError("Invalid command. Need to specify if you're adding a Player or an Enemy!");
+                }
+
+                if (tracker.characters[characterName]) {
+                    throw new OmniError(`A character with the name ${characterName} already exists!`);
                 }
                 tracker.addNewCharacter(characterName, message.author.id, characterType)
                 .then(newCharacter => {
