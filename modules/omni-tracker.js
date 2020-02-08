@@ -120,7 +120,7 @@ class Property {
      * @returns {Property}
      */
     static newPropertyFromBotData(botData) {
-        return new Property(botData.propertyName, botData.currentValue, botData.isAboveFold, botData.character);
+        return new Property(botData.propertyName, botData.currentValue, botData.isAboveFold, botData.character, botData.dataMessage);
     }
     constructor(name, currentValue, isAboveFold, characterName, dataMessage) {
         this.propertyName = name;
@@ -132,6 +132,9 @@ class Property {
 
     save() {
         return this.dataMessage.edit(JSON.stringify(this));
+    }
+    delete() {
+        this.dataMessage.delete().catch(error => { console.error(error); });
     }
 
     toJSON() {
@@ -187,6 +190,10 @@ class Effect {
 
     save() {
         return this.dataMessage.edit(JSON.stringify(this));
+    }
+
+    delete() {
+        this.dataMessage.delete().catch(error => { console.error(error); });
     }
 
     toJSON() {
@@ -276,6 +283,25 @@ class Character {
 
     save() {
         return this.dataMessage.edit(JSON.stringify(this));
+    }
+
+    /**
+     * Deletes the character and all effects, properties, etc.
+     * @returns {Promise} Promise for the message deletion.
+     */
+    delete() {
+        return this.dataMessage.delete().then(msg => {
+            //Now that the player is deleted, clean up any remaining data messages they had
+            console.log(msg);
+            for (const property in this.properties) {
+                this.properties[property].delete();
+            }
+            for (const effect in this.effects) {
+                this.effects[effect].delete();
+            }
+        }).catch(error => {
+            console.error(error);
+        });
     }
 
     toJSON() {
@@ -451,10 +477,12 @@ class Character {
     }
 
     removeProperty(propertyName) {
-        if (!this.properties[propertyName]) {
+        let property = this.properties[propertyName];
+        if (!property) {
             throw new PropertyNotFoundError(propertyName, this.name);
         }
-        delete this.properties[propertyName];
+        property.delete();                       //Remove data from backend
+        delete this.properties[propertyName];    //Remove property from character object to keep in sync with backend
         return this;
     }
 
@@ -587,13 +615,17 @@ class OmniTracker {
         for (const data of botData) {
             switch (data.type) {
                 case 'Property':
-                    this.characters[data.character].properties[data.propertyName.toLowerCase()] = Property.newPropertyFromBotData(data);
-                    if (data.name == 'initiative') {
-                        this.combat = true;
+                    if (this.characters[data.character]) {
+                        this.characters[data.character].properties[data.propertyName.toLowerCase()] = Property.newPropertyFromBotData(data);
+                        if (data.propertyName == 'initiative') {
+                            this.combat = true;
+                        }
                     }
                     break;
                 case 'Effect':
-                    this.characters[data.affectedCharacterName].effects[data.effectName.toLowerCase()] = Effect.importFromBotData(data);
+                    if (this.characters[data.affectedCharacterName]) {
+                        this.characters[data.affectedCharacterName].effects[data.effectName.toLowerCase()] = Effect.importFromBotData(data);
+                    }
                     break;
     
                 case 'OmniTracker':
@@ -1100,13 +1132,13 @@ function handlePlayerCommands(command, message) {
                     for (characterName in tracker.characters) {
                         let character = tracker.characters[characterName];
                         if (character.enemy) {
-                            promises.push(character.dataMessage.delete());
+                            promises.push(character.delete());
                         }
                     }
                 } else {
                     let character = tracker.characters[command.groups.target];
                     if (character) {
-                        promises.push(character.dataMessage.delete());
+                        promises.push(character.delete());
                     } else {
                         message.reply(`Couldn't find a character with the name ${command.groups.target}. Please check your spelling!`)
                         .catch(error => {
