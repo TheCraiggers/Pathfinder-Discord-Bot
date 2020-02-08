@@ -410,10 +410,10 @@ class Character {
                 return this.setHealth(value);
                 break;
             case 'initiative':
-                return this.properties['initiative'] = new Property('initiative', value,isAboveFold, this);
+                return this.properties['initiative'] = new Property('initiative', value,isAboveFold, this.name);
                 break;
             default:
-                return this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold, this);
+                return this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold, this.name);
         }
     }
 
@@ -446,7 +446,7 @@ class Character {
             this.setHealth(currentValue,maxValue);
             return null;
         } else {
-            return this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this);
+            return this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this.name);
         }
     }
 
