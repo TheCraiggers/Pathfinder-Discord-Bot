@@ -383,19 +383,21 @@ class Character {
                 let newProperty = this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
                 if (newProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
                     promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                    this.properties[property.groups.propertyName.toLowerCase()] = newProperty;
                 }
                 if (message)
-                    reply += `${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
+                    reply += `Property ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
             } else {
                 let newProperty = this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
                 if (newProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
                     promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
+                    this.properties[property.groups.propertyName.toLowerCase()] = newProperty;
                 }
                 
             }
             Promise.all(promises).then(results => {
                 if (reply) {
-                    message.reply(reply).then(msg => {
+                    message.reply(`The following properties were set:\n${reply}`).then(msg => {
                         msg.delete(20000)
                     }).catch(error => { 
                         console.error(error) 
@@ -426,12 +428,13 @@ class Character {
     }
 
     /**
-     * Sets the existing property on a character to a new value. Automatically forces to lowercase and resolves aliases.
+     * Sets the existing property on a character to a new value or creates a new Property. Automatically forces to lowercase and resolves aliases.
+     * 
      * 
      * @param {String} propertyName Name of the property to set. It will be forced to lowercase automatically.
      * @param {*} value Value to set the property to.
      * @param {Boolean} isAboveFold Should this property always be displayed on the tracker?
-     * @returns {Property} Property
+     * @returns {Property} Property if new, nothing if property already existed.
      */
     setProperty(propertyName, value, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
@@ -439,11 +442,15 @@ class Character {
             case 'hp':
                 this.setHealth(value);
                 break;
-            case 'initiative':
-                return this.properties['initiative'] = new Property('initiative', value,isAboveFold, this.name);
-                break;
             default:
-                return this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold, this.name);
+                let property = this.properties[propertyName.toLowerCase()];
+                if (property) {
+                    property.value = value;
+                    property.isAboveFold = isAboveFold;
+                    property.save();
+                } else {
+                    return property = new Property(propertyName, value, isAboveFold, this.name);
+                }
         }
     }
 
