@@ -6,11 +6,11 @@
   "dependencies": {
     "curlrequest": "^1.0.1",
     "discord.js": "^11.5.1",
-    "mathjs": "^6.5.0",
+    "mathjs": "^6.6.0",
     "moment": "^2.24.0",
     "pageres": "^5.2.0",
     "random-js": "^2.1.0",
-    "rpg-dice-roller": "^4.0.1",
+    "rpg-dice-roller": "^4.0.2",
     "tmp": "^0.1.0"
   },
   "devDependencies": {},
