@@ -445,7 +445,7 @@ class Character {
             default:
                 let property = this.properties[propertyName.toLowerCase()];
                 if (property) {
-                    property.value = value;
+                    property.currentValue = value;
                     property.isAboveFold = isAboveFold;
                     property.save();
                 } else {
@@ -1436,7 +1436,7 @@ function handlePropertyCommands(command, message) {
     }  
 }
 const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
-const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+)(?<rollComment>.*)$/;
+const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d\S+)(?<rollComment>.*)$/i;
 function handleRollCommands(message) {
     const command = message.content.match(rollCommandRegex);
     let roller = new DiceRoller();
@@ -1466,15 +1466,19 @@ function handleRollCommands(message) {
                 tracker.updateTrackers();
             })
             .catch(error => {
-                //If the above was an error, it's probably straight dice notation
+                //If the above was an error, it's probably straight dice notation. If not, return the error.
                 notation = message.content.match(diceNotationRegex);
-                try {
-                    roller.roll(notation.groups.diceNotation.replace('+-','-'));
-                    message.reply(`${roller};${notation.groups.rollComment}`);
-                } catch(error){
-                    console.error(error)
-                    message.reply('Invalid roll command!')
-                    .catch(console.error);
+                if (!notation) {
+                    OmniTracker.handleCommonErrors(message, error);
+                } else {
+                    try {
+                        roller.roll(notation.groups.diceNotation.replace('+-','-'));
+                        message.reply(`${roller};${notation.groups.rollComment}`);
+                    } catch(error){
+                        console.error(error)
+                        message.reply('Invalid roll command!')
+                        .catch(console.error);
+                    }
                 }
             });
         
