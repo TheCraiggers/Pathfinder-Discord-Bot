@@ -93,6 +93,9 @@ module.exports = (client) => { return new OmniPlugin(client) }
 //Custom errors to aid in error messages back to users
 class OmniError extends Error {
     constructor(message) {
+        if (!message) {
+            message = "An unknown error occurred. Check your command syntax. If you're sure it's right, contact the bot administrator.";
+        }
         super(message);
         this.name = this.constructor.name;
     }
@@ -111,10 +114,34 @@ class PropertyNotFoundError extends OmniError {
 }
 
 class Property {
-    constructor(name, currentValue, isAboveFold) {
+    /**
+     * Given a parsed JSON message of a saved Property object, returns a new Property object.
+     * @param {Object} botData A parsed JSON object from a property message.
+     * @returns {Property}
+     */
+    static newPropertyFromBotData(botData) {
+        return new Property(botData.propertyName, botData.currentValue, botData.isAboveFold, botData.character, botData.dataMessage);
+    }
+    constructor(name, currentValue, isAboveFold, characterName, dataMessage) {
         this.propertyName = name;
         this.currentValue = currentValue;
         this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
+        this.dataMessage = dataMessage;
+        this.character = characterName;
+    }
+
+    save() {
+        return this.dataMessage.edit(JSON.stringify(this));
+    }
+    delete() {
+        this.dataMessage.delete().catch(error => { console.error(error); });
+    }
+
+    toJSON() {
+        let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
+        delete foo.dataMessage;             //Messages have circular references in them and we don't need them to be saved anyway.
+        foo.type = "Property";
+        return foo;
     }
     
     toString = function() {
@@ -135,8 +162,8 @@ Property.propertyReferencesRegex = /(?<lookupReference>[a-zA-Z]+)/g;
 
 class PropertyRange extends Property {
     //Property ranges only make sense with numbers, so use *1 to force to a number of some sort;
-    constructor(name, currentValue, maxValue, isAboveFold) {
-        super(name, currentValue * 1, isAboveFold);
+    constructor(name, currentValue, maxValue, isAboveFold, character, dataMessage) {
+        super(name, currentValue * 1, isAboveFold, character, dataMessage);
         this.maxValue = maxValue * 1;
     }
     
@@ -145,51 +172,144 @@ class PropertyRange extends Property {
     }
 }
 
-class Character {
-    static importJSON(character) {
-        if (character.enemy) {
-            var newCharacter = new Enemy(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+class Effect {
+    static importFromBotData(botData) {
+        return new Effect(botData);
+    }
+
+    constructor({effectName = undefined, affectedCharacterName = undefined, durationInSeconds = undefined, dataMessage = undefined}) {
+        this.effectName = effectName;
+        this.affectedCharacterName = affectedCharacterName;
+        this.dataMessage = dataMessage;
+        if (durationInSeconds) {
+            this.durationInSeconds = durationInSeconds;
         } else {
-            var newCharacter = new Player(character.name, character.owner, character.HP.currentValue, character.HP.maxValue, character.message);
+            this.durationInSeconds = Infinity;
         }
+    }
 
-        //Properties
-        var keys = Object.keys(character.properties);
-        for (let i = 0; i < keys.length; i++) {
-            const property = character.properties[keys[i]];
-            if (property.maxValue)
-                newCharacter.properties[property.propertyName.toLowerCase()] = new PropertyRange(property.propertyName, property.currentValue, property.maxValue, property.isAboveFold);
-            else
-                newCharacter.properties[property.propertyName.toLowerCase()] = new Property(property.propertyName, property.currentValue, property.isAboveFold);
+    save() {
+        return this.dataMessage.edit(JSON.stringify(this));
+    }
+
+    delete() {
+        this.dataMessage.delete().catch(error => { console.error(error); });
+    }
+
+    toJSON() {
+        let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
+        delete foo.dataMessage;             //Messages have circular references in them and we don't need them to be saved anyway.
+        foo.type = "Effect";
+        return foo;
+    }
+
+    /**
+     * Takes a human readable duration string and translates it into a number of seconds
+     * @param {String} durationString A human readable representation of a dutation such as '1 day'
+     * @returns {Number} Number of seconds the duration string represents
+     */
+    static translateDurationStringToSeconds(durationString) {
+        var durationInSeconds = 0;
+        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/gi;
+        const durations = durationString.matchAll(durationRegex);
+        for (const duration of durations) {
+            switch (duration.groups.durationUnits) {
+                case 'round':
+                    durationInSeconds =+ duration.groups.duration * 6;
+                    break;
+                case 'min':
+                case 'minute':
+                    durationInSeconds =+ duration.groups.duration * 60;
+                    break;
+                case 'hour':
+                    durationInSeconds =+ duration.groups.duration * 3600;
+                    break;
+                case 'day':
+                    durationInSeconds =+ duration.groups.duration * 86400;
+                    break;
+                case 'week':
+                    durationInSeconds =+ duration.groups.duration * 604800;
+                    break;
+                default:
+                    console.error("Somehow got an invalid durationUnit past regex!");
+            }
         }
-
-        //Effects
-        var keys = Object.keys(character.effects);
-        for (let i = 0; i < keys.length; i++) {
-            let effect = character.effects[keys[i]];
-            if (effect.duration == null)
-                effect.duration = Infinity;
-            newCharacter.effects[keys[i].toLowerCase()] = effect;
+        if (durationInSeconds == 0) {
+            durationInSeconds = Infinity;       //This means no duration was set, so it'll last until removed.
         }
+        return durationInSeconds;
+        
+    }
+    
+    getDurationText() {
+        if (this.durationInSeconds === Infinity) {
+            return '';
+        } else if (this.durationInSeconds >= 86400) {
+            var foo = Math.round(this.durationInSeconds/86400);
+            return `${foo} day${(foo>1) ? 's':''}`;
+        } else if (this.durationInSeconds >= 3600) {
+            var foo = Math.round(this.durationInSeconds/3600);
+            return `${foo} hour${(foo>1) ? 's':''}`;
+        } else if (this.durationInSeconds >= 60) {
+            var foo = Math.round(this.durationInSeconds/60);
+            return `${foo} minute${(foo>1) ? 's':''}`;
+        } else {
+            var foo = Math.round(this.durationInSeconds/6);
+            return `${foo} round${(foo>1) ? 's':''}`;
+        }
+    }
+}
 
+class Character {
+    static importFromBotData(botData) {
+        if (botData.enemy) {
+            var newCharacter = new Enemy(botData);
+        } else {
+            var newCharacter = new Player(botData);
+        }
         return newCharacter;
     }
 
-    constructor(name, owner, currentHP, maxHP, dataMessage) {
+    constructor({name = undefined, owner = undefined, HP = undefined, dataMessage = undefined}) {
         this.name = name;
         this.owner = owner;
         this.indent = ' '.repeat(name.length + 1);
         this.effects = {};
         this.properties = {};
-        this.HP = new PropertyRange('HP',currentHP, maxHP);     //Even though this is a property, it's special (especially for enemies) and putting it here means I don't always have filter it out when printing props later. Plus it shouldn't ever be removed.
         this.linkedCharacters = {};     //Pets, familiars, shields, etc
         this.dataMessage = dataMessage; 
+        this.HP = HP;
+    }
+
+    save() {
+        return this.dataMessage.edit(JSON.stringify(this));
+    }
+
+    /**
+     * Deletes the character and all effects, properties, etc.
+     * @returns {Promise} Promise for the message deletion.
+     */
+    delete() {
+        return this.dataMessage.delete().then(msg => {
+            //Now that the player is deleted, clean up any remaining data messages they had
+            for (const property in this.properties) {
+                this.properties[property].delete();
+            }
+            for (const effect in this.effects) {
+                this.effects[effect].delete();
+            }
+        }).catch(error => {
+            console.error(error);
+        });
     }
 
     toJSON() {
         let foo = Object.assign({}, this);  //Copy this so when we whack the datamessage below we can still save later.
         foo.type = 'Character';
-        foo.dataMessage = null;     //Discord message objects contain circular references that trip up JSON.stringify and we don't need to save all that garbage anyway.
+        delete foo.dataMessage;     //Discord message objects contain circular references that trip up JSON.stringify and we don't need to save all that garbage anyway.
+        delete foo.properties;      //These have their own save functions
+        delete foo.effects;
+        delete foo.linkedCharacters;
         return foo;
     }
 
@@ -235,9 +355,17 @@ class Character {
         return {result: math.compile(stuff).evaluate(), humanReadable: humanReadable};
     }
 
+    /**
+     * Used to add a new Property to a character. Not for instantiation of a property object!
+     * @param {String} propertiesString A space delimited list of properties to add. Usually at the end of a add new player/stat command.
+     * @param {Message} message A Discord message object that comtained the command.
+     */
     addProperty(propertiesString, message) {
         const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
         let properties = propertiesString.matchAll(propertiesRegex);
+        let reply = '';
+        let promises = [];
+        message.channel.startTyping();
         for (let property of properties) {
             property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
             let important = false;
@@ -245,7 +373,7 @@ class Character {
                 important = true;
             if (property.groups.propertyValue) {        //Is it a PropertyRange or just a Property?
                 if (property.groups.propertyValue.startsWith('=')) {
-                    property.groups.propertyValue = property.groups.propertyValue.replace('=','');   
+                    property.groups.propertyValue = property.groups.propertyValue.replace('=','');   //Dynamic stats are set as is- no resolving.
                 } else {
                     let roller = new DiceRoller();
                     property.groups.propertyValue = this.resolveReference(property.groups.propertyValue, roller).result;
@@ -253,49 +381,82 @@ class Character {
                         message.reply(`${roller}`);
                     }
                 }
-                this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
-                if (message)
-                    message.reply(`${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}`);
+                promises.push(this.setProperty(property.groups.propertyName, property.groups.propertyValue, important));
             } else {
-                this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                if (message)
-                    message.reply(`${this.name} ${this.properties[property.groups.propertyName.toLowerCase()]}`);
+                promises.push(this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue));
+            }
+            if (message) {
+                if (property.groups.propertyName.toLowerCase() == 'hp') {
+                    reply += `Health is now ${this.HP.currentHP}/${this.HP.maxHP}\n`;
+                } else {
+                    reply += `Property ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
+                }
+                
             }
         }
+        Promise.all(promises).then(results => {
+            message.channel.stopTyping();
+            if (reply) {
+                message.reply(`The following properties were set:\n${reply}`).then(msg => {
+                    msg.delete(20000)
+                }).catch(error => { 
+                    console.error(error) 
+                });
+                reply = undefined;      //Sometimes this would fire twice, this at least unsures there's new messages.
+            }
+                
+        })
     }
 
     setHealth(currentHP, maxHP) {
         if (maxHP !== undefined)
-            this.HP.maxValue = maxHP;
-        else if (this.HP.maxValue == 0) {
-            this.HP.maxValue = currentHP;       //Shortcut for new character creation so you can just say HP:300
+            this.HP.maxHP = maxHP;
+        else if (this.HP.maxHP == 0) {
+            this.HP.maxHP = currentHP;       //Shortcut for new character creation so you can just say HP:300
         }
 
         if (currentHP < 0) {
             currentHP = 0;
-        } else if (currentHP > this.HP.maxValue) {
-            currentHP = this.HP.maxValue;
+        } else if (currentHP > this.HP.maxHP) {
+            currentHP = this.HP.maxHP;
         }
-        this.HP.currentValue = currentHP;
-        this.properties['hp'] = this.HP;
+        this.HP.currentHP = currentHP;
+        this.save();
         
         return this;
     }
 
+    /**
+     * Sets the existing property on a character to a new value or creates a new Property. Automatically forces to lowercase and resolves aliases.
+     * Saves the data for you and returns the Promise so you know when it's done saving.
+     * 
+     * @param {String} propertyName Name of the property to set. It will be forced to lowercase automatically.
+     * @param {*} value Value to set the property to.
+     * @param {Boolean} isAboveFold Should this property always be displayed on the tracker?
+     * @returns {Promise} Promise of the new/edited Property
+     */
     setProperty(propertyName, value, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         switch (propertyName.toLowerCase()) {             //Some props are so important they exist on the char object. Deal with those.
             case 'hp':
                 this.setHealth(value);
                 break;
-            case 'initiative':
-                this.properties['initiative'] = new Property('initiative', value);
-                break;
             default:
-                this.properties[propertyName.toLowerCase()] = new Property(propertyName, value, isAboveFold);
+                let property = this.properties[propertyName.toLowerCase()];
+                if (property) {
+                    //Edit existing property
+                    property.currentValue = value;
+                    property.isAboveFold = isAboveFold;
+                    return property.save();
+                } else {
+                    //Create new property
+                    property = new Property(propertyName, value, isAboveFold, this.name);
+                    this.properties[propertyName] = property;
+                    return this.dataMessage.channel.send(JSON.stringify(property)).then(msg => {
+                        property.dataMessage = msg;
+                    });
+                }
         }
-        
-        return this;
     }
 
     showCharacterSynopsis(channel) {
@@ -303,7 +464,7 @@ class Character {
         if (this.enemy) {
             output += `${this.name}: <${this.getAmbiguousHP()}>`;
         } else {
-            output += `${this.name}: ${this.HP.currentValue}/${this.HP.maxValue}`;
+            output += `${this.name}: ${this.HP.currentHP}/${this.HP.maxHP}`;
         }
 
         for (var propertyName of Object.keys(this.properties)) {
@@ -315,7 +476,7 @@ class Character {
         output += '\n';
         for (var effectName of Object.keys(this.effects)) {
             var effect = this.effects[effectName];
-            output += `${this.indent} ${effect.name} ${[getDurationText(effect.duration)]}\n`;
+            output += `${this.indent} ${effect.effectName} ${effect.getDurationText()}\n`;
         }
         output += '```';
         return channel.send(output);
@@ -323,18 +484,34 @@ class Character {
 
     setPropertyRange(propertyName, currentValue, maxValue, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
-        if (propertyName.toUpperCase() == 'HP')
+        if (propertyName.toUpperCase() == 'HP') {
             this.setHealth(currentValue,maxValue);
-        else 
-            this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold);
-        return this;
+        } else {
+            let property = this.properties[propertyName.toLowerCase()];
+            if (property) {
+                //Edit existing property
+                property.currentValue = value;
+                property.maxValue = maxValue;
+                property.isAboveFold = isAboveFold;
+                return property.save();
+            } else {
+                //Create new property
+                property = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this.name);
+                this.properties[propertyName] = property;
+                return this.dataMessage.channel.send(JSON.stringify(property)).then(msg => {
+                    property.dataMessage = msg;
+                });
+            }
+        }
     }
 
     removeProperty(propertyName) {
-        if (!this.properties[propertyName]) {
+        let property = this.properties[propertyName];
+        if (!property) {
             throw new PropertyNotFoundError(propertyName, this.name);
         }
-        delete this.properties[propertyName];
+        property.delete();                       //Remove data from backend
+        delete this.properties[propertyName];    //Remove property from character object to keep in sync with backend
         return this;
     }
 
@@ -343,88 +520,65 @@ class Character {
         return this;
     }
 
+    /**
+     * Adds a new effect to a character, or increases the duration of an existing Effect.
+     * @param {String} effectName Name of the effect, such as Confused.
+     * @param {String} durationString A human-readable representation of a duration such as "1 round" or "1 day". Leave blank for infinity.
+     * @returns {Effect}
+     */
     addEffect(effectName, durationString) {
-        var durationInSeconds = 0;
-        const durationRegex = /((?<duration>\d+) (?<durationUnits>(round|min|minute|hour|day|week))s?)/gi;
-        const durations = durationString.matchAll(durationRegex);
-        for (const duration of durations) {
-            switch (duration.groups.durationUnits) {
-                case 'round':
-                    durationInSeconds =+ duration.groups.duration * 6;
-                    break;
-                case 'min':
-                case 'minute':
-                    durationInSeconds =+ duration.groups.duration * 60;
-                    break;
-                case 'hour':
-                    durationInSeconds =+ duration.groups.duration * 3600;
-                    break;
-                case 'day':
-                    durationInSeconds =+ duration.groups.duration * 86400;
-                    break;
-                case 'week':
-                    durationInSeconds =+ duration.groups.duration * 604800;
-                    break;
-                default:
-                    console.error("Somehow got an invalid durationUnit past regex!");
-            }
-        }
-        if (durationInSeconds == 0)
-            durationInSeconds = Infinity;       //This means no duration was set, so it'll last until removed.
-
-        if (this.effects[effectName.toLowerCase()]) {
+        let durationInSeconds = Effect.translateDurationStringToSeconds(durationString);
+        let existingEffect = this.effects[effectName.toLowerCase()];
+        if (existingEffect) {
             //Effect already exists. Compare durations. Highest duration stays
-            this.effects[effectName.toLowerCase()].duration = Math.max(this.effects[effectName.toLowerCase()].duration, durationInSeconds);
+            if (existingEffect.durationInSeconds < durationInSeconds) {
+                existingEffect.durationInSeconds = durationInSeconds;
+                existingEffect.save();
+            }
+            return existingEffect;
         } else {
-            this.effects[effectName.toLowerCase()] = {name: effectName, duration: durationInSeconds};
+            let newEffect = this.effects[effectName.toLowerCase()] = new Effect({effectName: effectName, durationInSeconds: durationInSeconds, affectedCharacterName: this.name});
+            this.dataMessage.channel.send(JSON.stringify(newEffect)).then(msg => {
+                newEffect.dataMessage = msg;
+                return newEffect;
+            })
         }
-    }
-}
-
-function getDurationText(duration) {
-    if (duration === Infinity) {
-        return '';
-    } else if (duration >= 86400) {
-        var foo = Math.round(duration/86400);
-        return `${foo} day${(foo>1) ? 's':''}`;
-    } else if (duration >= 3600) {
-        var foo = Math.round(duration/3600);
-        return `${foo} hour${(foo>1) ? 's':''}`;
-    } else if (duration >= 60) {
-        var foo = Math.round(duration/60);
-        return `${foo} minute${(foo>1) ? 's':''}`;
-    } else {
-        var foo = Math.round(duration/6);
-        return `${foo} round${(foo>1) ? 's':''}`;
     }
 }
 
 class Player extends Character {
-    constructor(name,owner,currentHP,maxHP, dataMessage) {
-        super(name, owner, currentHP,maxHP, dataMessage);
+    constructor({name = undefined, owner = undefined, HP = undefined, dataMessage = undefined}) {
+        super({name: name, owner: owner, HP: HP, dataMessage: dataMessage});
         this.enemy = false;
+        this.type = 'Player';
     }
 }
 
 class Enemy extends Character {
-    constructor(name,owner,currentHP,maxHP,dataMessage) {
-        super(name, owner, currentHP,maxHP,dataMessage);
+    constructor({name = undefined, owner = undefined, HP = undefined, dataMessage = undefined}) {
+        super({name: name, owner: owner, HP: HP, dataMessage: dataMessage});
         this.enemy = true;
+        this.type = 'Enemy';
     }
 
     getAmbiguousHP() {
-        var percentage = this.HP.currentValue/this.HP.maxValue;
-        if (percentage <= 0) {
-            return 'Dead';
-        } else if (percentage < .15) {
-            return 'Critical';
-        } else if (percentage < .5) {
-            return 'Bloodied';
-        } else if (percentage < 1) {
-            return 'Injured';
-        } else if (percentage == 1) {
-            return 'Healthy';
+        if (this.HP.maxHP) {
+            let percentage = this.HP.currentHP/this.HP.maxHP;
+            if (percentage <= 0) {
+                return 'Dead';
+            } else if (percentage < .15) {
+                return 'Critical';
+            } else if (percentage < .5) {
+                return 'Bloodied';
+            } else if (percentage < 1) {
+                return 'Injured';
+            } else if (percentage == 1) {
+                return 'Healthy';
+            } else {
+                return 'Unknown?';
+            }
         } else {
+            //Don't want to end the universe by trying to divide by 0
             return 'Unknown?';
         }
     }
@@ -442,8 +596,8 @@ class OmniTracker {
                 .then(function(messages) {
                     let botDatum = [];
                     for (const msg of messages) {
-                        let data = JSON.parse(msg[1].content);
-                        data.message = msg[1];
+                        let data = JSON.parse(msg[1].content); //TODO: let class functions parse their JSON
+                        data.dataMessage = msg[1];
                         botDatum.push(data);
                         if (data.type == 'OmniTracker')
                             var omniData = true;
@@ -465,33 +619,53 @@ class OmniTracker {
         });
     }
 
+    /**
+     * 
+     * @param {Message} message Discord message that contains the command that generated the error
+     * @param {Error} error If error is an OmniError type, this will message the user with a proper user-facing error message. Otherwise, a generic error message will be sent.
+     */
     static handleCommonErrors(message, error) {
         if (error instanceof OmniError) {
             message.reply(error.message).catch(err => {console.error(err)});
-            return true;
         } else {
-            return false;
+            console.error(error);
+            message.reply("Sorry, an unknown error occurred. Please check your command syntax.").catch(err => {console.error(err)});
         }
     }
 
     constructor (botData) {
-        this.characters = {};
         this.time;
+        this.characters = [];
         this.combatCurrentInit = null;
         this.omniDataMessage = botData.omniData;
         this.combatDataMessage = botData.combatData;
 
+        //We need to create the Character objects first since everything plugs into that
+        let charactersToImport = botData.filter(datum => datum.type == 'Character');
+        for (const characterToImport of charactersToImport) {
+            this.characters[characterToImport.name.toLowerCase()] = Character.importFromBotData(characterToImport);
+        }
+
         for (const data of botData) {
             switch (data.type) {
-                case 'Character':
-                    this.characters[data.name.toLowerCase()] = Character.importJSON(data);
-                    if (this.characters[data.name.toLowerCase()].properties['initiative'])
-                        this.combat = true;
+                case 'Property':
+                    if (this.characters[data.character.toLowerCase()]) {
+                        this.characters[data.character.toLowerCase()].properties[data.propertyName.toLowerCase()] = Property.newPropertyFromBotData(data);
+                        if (data.propertyName == 'initiative') {
+                            this.combat = true;
+                        }
+                    }
                     break;
+                case 'Effect':
+                    if (this.characters[data.affectedCharacterName.toLowerCase()]) {
+                        this.characters[data.affectedCharacterName.toLowerCase()].effects[data.effectName.toLowerCase()] = Effect.importFromBotData(data);
+                    }
+                    break;
+    
                 case 'OmniTracker':
                     this.time = new Moment(data.date).utc();
                     this.combatCurrentInit = data.combatCurrentInit;
-                    this.omniDataMessage = data.message;
+                    this.omniDataMessage = data.dataMessage;
                     break;
             }
         }
@@ -616,6 +790,34 @@ class OmniTracker {
             }
         });
     }
+    /**
+     * Used for actually adding a new char into the game, not just instantiating an object!
+     * @param {String} name 
+     * @param {String} owner 
+     * @param {Character} characterClass 
+     * @returns {Character} A promise for a new character of type characterType
+     * @throws {OmniError}
+     */
+    addNewCharacter(name, owner, characterClass) {
+        var tracker = this;
+        return new Promise(function(resolve, reject) {
+            if (characterClass.prototype instanceof Character) {
+                let newCharacter = new characterClass({name: name, owner: owner, HP: {currentHP: 0, maxHP: 0}});
+                tracker.omniDataMessage.channel.send(JSON.stringify(newCharacter))
+                .then(newCharacterDataMessage => {
+                    newCharacter.dataMessage = newCharacterDataMessage;
+                    tracker.characters[name.toLowerCase()] = newCharacter;
+                    resolve(newCharacter);
+                })
+                .catch(error => {
+                    console.error(error);
+                    reject(new OmniError());
+                })
+            } else {
+                throw "Invalid character type."
+            }
+        });
+    }
 
     increaseTimeForCharacter(increaseInSeconds, character, message) {
         //Combat is weird in that while a round is 6 seconds, effects don't end at the end of the round, rather the start of the character turn.
@@ -623,10 +825,13 @@ class OmniTracker {
         var expiredEffectsMessage = '';
         for (let effectName in character.effects) {
             let effect = character.effects[effectName];
-            effect.duration -= increaseInSeconds;
-            if (effect.duration <= 0) {
+            effect.durationInSeconds -= increaseInSeconds;
+            if (effect.durationInSeconds <= 0) {
                 expiredEffectsMessage += `<@${character.owner}>, ${effectName} has ended on ${character.name}.\n`;
+                effect.delete();
                 delete character.effects[effectName];
+            } else {
+                effect.save();
             }
         }
         if (expiredEffectsMessage) {
@@ -682,6 +887,7 @@ class OmniTracker {
 
     saveBotData() {
         //Saves the data to the bot channel
+        return;
         this.omniDataMessage.edit(JSON.stringify(this))
         .catch(console.error);
 
@@ -763,10 +969,13 @@ class OmniTracker {
                     output += `  ${init} | `;
                 }
             }
-            if (character.enemy == false || isGMTracker) {
-                output += `${character.name}: ${character.HP.currentValue}/${character.HP.maxValue}`;
-            } else {
-                output += `${character.name}: <${character.getAmbiguousHP()}>`;
+            output += `${character.name}:`;
+            if (character.HP) {
+                if (character.enemy == false || isGMTracker) {
+                    output += ` ${character.HP.currentHP}/${character.HP.maxHP}`;
+                } else {
+                    output += ` <${character.getAmbiguousHP()}>`;
+                }
             }
 
             for (var propertyName of Object.keys(character.properties)) {
@@ -778,7 +987,7 @@ class OmniTracker {
             output += '\n';
             for (var effectName of Object.keys(character.effects)) {
                 var effect = character.effects[effectName];
-                output += `${combatIndent}${character.indent} ${effect.name} ${[getDurationText(effect.duration)]}\n`;
+                output += `${combatIndent}${character.indent} ${effect.effectName} ${effect.getDurationText()}\n`;
             }
             
         }
@@ -811,7 +1020,7 @@ function handleCommand(message) {
     if (message.content.startsWith('! '))
         message.content = message.content.replace(/^! /,'!');
     
-    const keyword = message.content.match(botCommandRegex).groups.keyword;
+    const keyword = message.content.match(botCommandRegex).groups.keyword.toLowerCase();
     switch (keyword) {
         case 'omni help':
             message.author.send(helpMessage)
@@ -960,13 +1169,13 @@ function handlePlayerCommands(command, message) {
                     for (characterName in tracker.characters) {
                         let character = tracker.characters[characterName];
                         if (character.enemy) {
-                            promises.push(character.dataMessage.delete());
+                            promises.push(character.delete());
                         }
                     }
                 } else {
                     let character = tracker.characters[command.groups.target];
                     if (character) {
-                        promises.push(character.dataMessage.delete());
+                        promises.push(character.delete());
                     } else {
                         message.reply(`Couldn't find a character with the name ${command.groups.target}. Please check your spelling!`)
                         .catch(error => {
@@ -995,25 +1204,31 @@ function handlePlayerCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 var characterName = command.groups.target.replace(/'/g,"");
-                const propertiesRegex = /(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>\S+))/g;
+
                 if (command.groups.noun == 'player') {
-                    tracker.characters[characterName.toLowerCase()] = new Player(characterName, message.author.id, 0, 0);    //HP will hopefully get set in the properties below. And if not, 0/0 will prompt the user.
+                    var characterType = Player;
                 } else if (command.groups.noun == 'enemy') {
                     gmOnlyCommand();
-                    tracker.characters[characterName.toLowerCase()] = new Enemy(characterName, message.author.id, 0, 0);
+                    var characterType = Enemy;
+                } else {
+                    throw new OmniError("Invalid command. Need to specify if you're adding a Player or an Enemy!");
                 }
-                let character = tracker.characters[characterName.toLowerCase()];
-                if (command.groups.properties) {
-                    character.addProperty(command.groups.properties);
+
+                if (tracker.characters[characterName]) {
+                    throw new OmniError(`A character with the name ${characterName} already exists!`);
                 }
-                tracker.saveBotData();
-                tracker.updateTrackers();
-                message.reply(`Added new character ${characterName}`);
-                tracker.characters[characterName.toLowerCase()].showCharacterSynopsis(message.channel);
+                tracker.addNewCharacter(characterName, message.author.id, characterType)
+                .then(newCharacter => {
+                    if (command.groups.properties) {
+                        newCharacter.addProperty(command.groups.properties, message);
+                    }
+                    tracker.updateTrackers();
+                    message.reply(`Added new character ${characterName}`);
+                    tracker.characters[characterName.toLowerCase()].showCharacterSynopsis(message.channel);
+                })    
             })
             .catch(error => {
-                message.reply('Sorry, there was an error. Check your syntax!');
-                console.error(error);
+                OmniTracker.handleCommonErrors(message, error);
             });
             break;
         case 'show':
@@ -1060,6 +1275,7 @@ function handleEffectCommands(command, message) {
 
                 let effect = command.groups.properties.match(effectRegex);
                 if (effect) {
+                    effect.groups.effectName = effect.groups.effectName.replace(/'/g,"");
                     switch (command.groups.target.toLowerCase()) {
                         case '%players':
                             for (characterName in tracker.characters) {
@@ -1227,9 +1443,7 @@ function handlePropertyCommands(command, message) {
                             message.reply(`Removing property ${property.groups.propertyName} from character ${characterName}`).catch(err => {console.error(err)});
                         }
                     } catch (e) {
-                        if (!OmniTracker.handleCommonErrors(message, e)) {
-                            console.error(e);
-                        }
+                        OmniTracker.handleCommonErrors(message, e);
                     }
                     tracker.saveBotData();
                     tracker.updateTrackers();
@@ -1243,7 +1457,7 @@ function handlePropertyCommands(command, message) {
     }  
 }
 const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
-const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+)(?<rollComment>.*)$/;
+const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d\S+)(?<rollComment>.*)$/i;
 function handleRollCommands(message) {
     const command = message.content.match(rollCommandRegex);
     let roller = new DiceRoller();
@@ -1273,15 +1487,19 @@ function handleRollCommands(message) {
                 tracker.updateTrackers();
             })
             .catch(error => {
-                //If the above was an error, it's probably straight dice notation
+                //If the above was an error, it's probably straight dice notation. If not, return the error.
                 notation = message.content.match(diceNotationRegex);
-                try {
-                    roller.roll(notation.groups.diceNotation.replace('+-','-'));
-                    message.reply(`${roller};${notation.groups.rollComment}`);
-                } catch(error){
-                    console.error(error)
-                    message.reply('Invalid roll command!')
-                    .catch(console.error);
+                if (!notation) {
+                    OmniTracker.handleCommonErrors(message, error);
+                } else {
+                    try {
+                        roller.roll(notation.groups.diceNotation.replace('+-','-'));
+                        message.reply(`${roller};${notation.groups.rollComment}`);
+                    } catch(error){
+                        console.error(error)
+                        message.reply('Invalid roll command!')
+                        .catch(console.error);
+                    }
                 }
             });
         
@@ -1352,9 +1570,9 @@ function handleChangingHP(message) {
                 message.reply(`Could not find a character with that name!`);
                 return;
             } else {
-                character.setHealth(character.HP.currentValue + parsed.groups.delta);
+                character.setHealth(character.HP.currentHP*1 + parsed.groups.delta);
                 character.showCharacterSynopsis(message.channel);
-                if (character.enemy && character.HP.currentValue == 0) {
+                if (character.enemy && character.HP.currentHP == 0) {
                     //Character was an enemy who died, remove and check to see if combat ends
                     character.dataMessage.delete()
                     .then(function () {
