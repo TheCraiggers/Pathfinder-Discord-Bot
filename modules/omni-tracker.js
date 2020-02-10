@@ -382,13 +382,14 @@ class Character {
                     }
                 }
                 promises.push(this.setProperty(property.groups.propertyName, property.groups.propertyValue, important));
-                if (message)
-                    reply += `Property ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
             } else {
-                let characterProperty = this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                if (characterProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
-                    promises.push(this.dataMessage.channel.send(JSON.stringify(characterProperty)));
-                    this.properties[property.groups.propertyName.toLowerCase()] = characterProperty;
+                promises.push(this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue));
+            }
+            if (message) {
+                if (property.groups.propertyName.toLowerCase() == 'hp') {
+                    reply += `Health is now ${this.HP.currentHP}/${this.HP.maxHP}\n`;
+                } else {
+                    reply += `Property ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
                 }
                 
             }
@@ -485,9 +486,22 @@ class Character {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
         if (propertyName.toUpperCase() == 'HP') {
             this.setHealth(currentValue,maxValue);
-            return null;
         } else {
-            return this.properties[propertyName.toLowerCase()] = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this.name);
+            let property = this.properties[propertyName.toLowerCase()];
+            if (property) {
+                //Edit existing property
+                property.currentValue = value;
+                property.maxValue = maxValue;
+                property.isAboveFold = isAboveFold;
+                return property.save();
+            } else {
+                //Create new property
+                property = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this.name);
+                this.properties[propertyName] = property;
+                return this.dataMessage.channel.send(JSON.stringify(property)).then(msg => {
+                    property.dataMessage = msg;
+                });
+            }
         }
     }
 
@@ -1003,7 +1017,7 @@ function handleCommand(message) {
     if (message.content.startsWith('! '))
         message.content = message.content.replace(/^! /,'!');
     
-    const keyword = message.content.match(botCommandRegex).groups.keyword;
+    const keyword = message.content.match(botCommandRegex).groups.keyword.toLowerCase();
     switch (keyword) {
         case 'omni help':
             message.author.send(helpMessage)
@@ -1553,7 +1567,7 @@ function handleChangingHP(message) {
                 message.reply(`Could not find a character with that name!`);
                 return;
             } else {
-                character.setHealth(character.HP.currentValue + parsed.groups.delta);
+                character.setHealth(character.HP.currentHP*1 + parsed.groups.delta);
                 character.showCharacterSynopsis(message.channel);
                 if (character.enemy && character.HP.currentValue == 0) {
                     //Character was an enemy who died, remove and check to see if combat ends
