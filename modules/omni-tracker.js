@@ -365,6 +365,7 @@ class Character {
         let properties = propertiesString.matchAll(propertiesRegex);
         let reply = '';
         let promises = [];
+        message.channel.startTyping();
         for (let property of properties) {
             property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
             let important = false;
@@ -380,33 +381,30 @@ class Character {
                         message.reply(`${roller}`);
                     }
                 }
-                let newProperty = this.setProperty(property.groups.propertyName, property.groups.propertyValue, important);
-                if (newProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
-                    promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
-                    this.properties[property.groups.propertyName.toLowerCase()] = newProperty;
-                }
+                promises.push(this.setProperty(property.groups.propertyName, property.groups.propertyValue, important));
                 if (message)
                     reply += `Property ${this.properties[property.groups.propertyName.toLowerCase()]}\n`;
             } else {
-                let newProperty = this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
-                if (newProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
-                    promises.push(this.dataMessage.channel.send(JSON.stringify(newProperty)));
-                    this.properties[property.groups.propertyName.toLowerCase()] = newProperty;
+                let characterProperty = this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue);
+                if (characterProperty) {      //Some special stats like HP are stored directly on the char object and don't need to be resaved.
+                    promises.push(this.dataMessage.channel.send(JSON.stringify(characterProperty)));
+                    this.properties[property.groups.propertyName.toLowerCase()] = characterProperty;
                 }
                 
             }
-            Promise.all(promises).then(results => {
-                if (reply) {
-                    message.reply(`The following properties were set:\n${reply}`).then(msg => {
-                        msg.delete(20000)
-                    }).catch(error => { 
-                        console.error(error) 
-                    });
-                    reply = undefined;      //Sometimes this would fire twice, this at least unsures there's new messages.
-                }
-                    
-            })
         }
+        Promise.all(promises).then(results => {
+            message.channel.stopTyping();
+            if (reply) {
+                message.reply(`The following properties were set:\n${reply}`).then(msg => {
+                    msg.delete(20000)
+                }).catch(error => { 
+                    console.error(error) 
+                });
+                reply = undefined;      //Sometimes this would fire twice, this at least unsures there's new messages.
+            }
+                
+        })
     }
 
     setHealth(currentHP, maxHP) {
@@ -429,12 +427,12 @@ class Character {
 
     /**
      * Sets the existing property on a character to a new value or creates a new Property. Automatically forces to lowercase and resolves aliases.
-     * 
+     * Saves the data for you and returns the Promise so you know when it's done saving.
      * 
      * @param {String} propertyName Name of the property to set. It will be forced to lowercase automatically.
      * @param {*} value Value to set the property to.
      * @param {Boolean} isAboveFold Should this property always be displayed on the tracker?
-     * @returns {Property} Property if new, nothing if property already existed.
+     * @returns {Promise} Promise of the new/edited Property
      */
     setProperty(propertyName, value, isAboveFold) {
         propertyName = Property.translateAliasedPropertyNames(propertyName);
@@ -445,11 +443,17 @@ class Character {
             default:
                 let property = this.properties[propertyName.toLowerCase()];
                 if (property) {
+                    //Edit existing property
                     property.currentValue = value;
                     property.isAboveFold = isAboveFold;
-                    property.save();
+                    return property.save();
                 } else {
-                    return property = new Property(propertyName, value, isAboveFold, this.name);
+                    //Create new property
+                    property = new Property(propertyName, value, isAboveFold, this.name);
+                    this.properties[propertyName] = property;
+                    return this.dataMessage.channel.send(JSON.stringify(property)).then(msg => {
+                        property.dataMessage = msg;
+                    });
                 }
         }
     }
@@ -631,16 +635,16 @@ class OmniTracker {
         for (const data of botData) {
             switch (data.type) {
                 case 'Property':
-                    if (this.characters[data.character]) {
-                        this.characters[data.character].properties[data.propertyName.toLowerCase()] = Property.newPropertyFromBotData(data);
+                    if (this.characters[data.character.toLowerCase()]) {
+                        this.characters[data.character.toLowerCase()].properties[data.propertyName.toLowerCase()] = Property.newPropertyFromBotData(data);
                         if (data.propertyName == 'initiative') {
                             this.combat = true;
                         }
                     }
                     break;
                 case 'Effect':
-                    if (this.characters[data.affectedCharacterName]) {
-                        this.characters[data.affectedCharacterName].effects[data.effectName.toLowerCase()] = Effect.importFromBotData(data);
+                    if (this.characters[data.affectedCharacterName.toLowerCase()]) {
+                        this.characters[data.affectedCharacterName.toLowerCase()].effects[data.effectName.toLowerCase()] = Effect.importFromBotData(data);
                     }
                     break;
     
