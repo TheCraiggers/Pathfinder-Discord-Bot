@@ -588,19 +588,25 @@ class OmniTracker {
     static getBotDataMessages(message) {
         return new Promise(function(resolve, reject) {
             //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
+            let botDatum = [];
             var botDataChannel = message.guild.channels.find(msg => msg.name == 'omni-data');
             if (!botDataChannel) {
                 message.reply('Please use !omni setup first!');
             } else {
-                botDataChannel.fetchMessages()
-                .then(function(messages) {
-                    let botDatum = [];
-                    for (const msg of messages) {
-                        let data = JSON.parse(msg[1].content); //TODO: let class functions parse their JSON
-                        data.dataMessage = msg[1];
-                        botDatum.push(data);
-                        if (data.type == 'OmniTracker')
-                            var omniData = true;
+                (async function getAllMessages() {
+                    let lastCollection = await botDataChannel.fetchMessages({limit:100});
+                    let lastSnowflake = null;
+                    while (lastCollection.size > 0) {
+                        for (const msg of lastCollection) {
+                            let data = JSON.parse(msg[1].content); //TODO: let class functions parse their JSON
+                            lastSnowflake = msg[0];
+                            data.dataMessage = msg[1];
+                            botDatum.push(data);
+                            if (data.type == 'OmniTracker')
+                                var omniData = true;
+                        }
+                        
+                        lastCollection = await botDataChannel.fetchMessages({limit:100, before: lastSnowflake});        
                     }
                     if (!omniData) {
                         //No Omni Tracker data found. Create it!
@@ -614,7 +620,10 @@ class OmniTracker {
                     } else {
                         resolve(botDatum);
                     }
-                })
+                })();    
+                    
+                
+            
             }
         });
     }
