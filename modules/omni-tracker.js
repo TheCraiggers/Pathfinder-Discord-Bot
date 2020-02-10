@@ -1220,7 +1220,7 @@ function handlePlayerCommands(command, message) {
                 tracker.addNewCharacter(characterName, message.author.id, characterType)
                 .then(newCharacter => {
                     if (command.groups.properties) {
-                        newCharacter.addProperty(command.groups.properties);
+                        newCharacter.addProperty(command.groups.properties, message);
                     }
                     tracker.updateTrackers();
                     message.reply(`Added new character ${characterName}`);
@@ -1572,7 +1572,7 @@ function handleChangingHP(message) {
             } else {
                 character.setHealth(character.HP.currentHP*1 + parsed.groups.delta);
                 character.showCharacterSynopsis(message.channel);
-                if (character.enemy && character.HP.currentValue == 0) {
+                if (character.enemy && character.HP.currentHP == 0) {
                     //Character was an enemy who died, remove and check to see if combat ends
                     character.dataMessage.delete()
                     .then(function () {
