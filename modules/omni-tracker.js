@@ -825,10 +825,13 @@ class OmniTracker {
         var expiredEffectsMessage = '';
         for (let effectName in character.effects) {
             let effect = character.effects[effectName];
-            effect.duration -= increaseInSeconds;
-            if (effect.duration <= 0) {
+            effect.durationInSeconds -= increaseInSeconds;
+            if (effect.durationInSeconds <= 0) {
                 expiredEffectsMessage += `<@${character.owner}>, ${effectName} has ended on ${character.name}.\n`;
+                effect.delete();
                 delete character.effects[effectName];
+            } else {
+                effect.save();
             }
         }
         if (expiredEffectsMessage) {
