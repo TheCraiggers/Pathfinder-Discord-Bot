@@ -451,7 +451,7 @@ class Character {
                 } else {
                     //Create new property
                     property = new Property(propertyName, value, isAboveFold, this.name);
-                    this.properties[propertyName] = property;
+                    this.properties[propertyName.toLowerCase()] = property;
                     return this.dataMessage.channel.send(JSON.stringify(property)).then(msg => {
                         property.dataMessage = msg;
                     });
