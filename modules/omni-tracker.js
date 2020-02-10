@@ -684,6 +684,10 @@ class OmniTracker {
         return { type: 'OmniTracker', date: this.time, combatCurrentInit: this.combatCurrentInit };
     }
 
+    save() {
+        this.omniDataMessage.edit(JSON.stringify(this)).catch(error => { console.error(error)});
+    }
+
     getDateText() {
         //Pathfinder's calendar is basically just ours with different names. Boring, but easy!
         var monthName;
@@ -1397,7 +1401,7 @@ function handleTimeCommands(command, message) {
                     var tracker = new OmniTracker(data);
     
                     tracker.increaseTime(command.groups.properties, message);
-                    tracker.saveBotData();               
+                    tracker.save();
                     tracker.updateTrackers();
                 })
                 .catch(console.error);
