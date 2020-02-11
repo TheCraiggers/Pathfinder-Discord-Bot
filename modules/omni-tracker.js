@@ -2,7 +2,7 @@ var helpMessage = `
 \`\`\`
 Most commands follow the '!omni <verb> <noun> <target> <properties>' pattern
 Verbs: add, set, remove, show, roll
-Nouns: tracker, player, effect, enemy, time, shield, property, shield, pet, familiar, group
+Nouns: tracker, player, effect, enemy, time, shield, property, owner
 Targets: names of players or enemies (quotes required if there are spaces), !players, !enemies, !everybody, !everyone
 Properties: used for setting durations, hit points, etc. AC, HP, etc.
 
@@ -64,6 +64,7 @@ GM Commands:
 !omni set stat init Bob 15                       (Change Bob's initiative to 15)
 !omni set stat init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !next                                       (When in combat, move to next character's turn)
+!omni set owner Bob @Bob                    (Sets the controller of the character to a specific user in Discord)
 \`\`\`
 `;
 
@@ -281,6 +282,10 @@ class Character {
         this.HP = HP;
     }
 
+    /**
+     * Saves the character.
+     * @returns {Promise} Promise of saved message.
+     */
     save() {
         return this.dataMessage.edit(JSON.stringify(this));
     }
@@ -1105,6 +1110,10 @@ function handleCommand(message) {
                 case 'property':
                     handlePropertyCommands(command, message);
                     break;
+                case 'controller':
+                case 'owner':
+                    handleOwnerCommand(command, message);
+                    break;
                 default:
                     message.reply('Invalid !omni command. Use !omni help if needed.')
                     .catch(console.error);
@@ -1663,4 +1672,34 @@ function handleOmniSetup(message) {
     })
     .then(console.log)
     .catch(console.error);
+}
+
+const getOwnerIdRegex = /<@!(?<ownerID>\d+)>/;
+function handleOwnerCommand(command, message) {
+    gmOnlyCommand();
+    OmniTracker.getBotDataMessages(message)
+            .then(data => {
+                let tracker = new OmniTracker(data);
+
+                let character = tracker.characters[command.groups.target.toLowerCase()];
+                if (!character) {
+                    throw new CharacterNotFoundError(command.groups.target);
+                } 
+                
+                let ownerID = command.groups.properties.match(getOwnerIdRegex);
+                if (ownerID) {
+                    character.owner = ownerID.groups.ownerID;
+                    character.save().then(msg => {
+                        return message.reply("Owner successfully set.");
+                    }).then(msg => {
+                        return msg.delete(20000);
+                    }).catch(error => {
+                        console.error(error);
+                    })
+
+                }
+            })
+            .catch(error => {
+                OmniTracker.handleCommonErrors(message, error);
+            });
 }
