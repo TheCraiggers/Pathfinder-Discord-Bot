@@ -1548,7 +1548,7 @@ function handleInitNextCommand(message) {
                 tracker.increaseTimeForCharacter(6, character, message);        //each round is 6 seconds
                 message.channel.send(`Hey <@${character.owner}> it's ${character.name}${suffix} turn!`);
 
-                tracker.saveBotData();
+                tracker.save();
                 tracker.updateTrackers();
                 tracker.showTrackerInChannel(message);
             })
