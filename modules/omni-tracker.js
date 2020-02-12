@@ -1013,11 +1013,20 @@ class OmniTracker {
         return output + '```';
     }
 
+    /**
+     * Given the Discord ID, return the character they own.
+     * If they own multiple characters, return the one currently in initiative order
+     * @param {Number} ID author.id of the message
+     * @returns {Character}
+     */
     getCharacterFromAuthorID(ID) {
-        //Given the Discord ID, return the first character they own.
-        for (var characterName in this.characters) {
-            if (this.characters[characterName].owner == ID)
-                return this.characters[characterName];
+        if (this.combat && this.characters[this.combatCurrentInit].owner == ID) {
+            return this.characters[this.combatCurrentInit];
+        } else {
+            for (var characterName in this.characters) {
+                if (this.characters[characterName].owner == ID)
+                    return this.characters[characterName];
+            }
         }
     }
 }
@@ -1499,10 +1508,10 @@ function handleRollCommands(message) {
                 }
                 if (command.groups.destinationStat) {
                     character.setProperty(command.groups.destinationStat, output.result);
-                    message.reply(`\`\`\`${command.groups.destinationStat} has been set to ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
+                    message.reply(`\`\`\`${command.groups.destinationStat} for ${character.name} has been set to ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
                     .catch(console.error);
                 } else {
-                    message.reply(`\`\`\`${command.groups.sourceStat} is ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
+                    message.reply(`\`\`\`${command.groups.sourceStat} for ${character.name} is ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
                     .catch(console.error);
                 }
                 tracker.saveBotData();
@@ -1613,9 +1622,11 @@ function handleChangingHP(message) {
                         if (!enemiesAlive) {
                             tracker.combat = false;
                             delete tracker.combatCurrentInit;
+                            tracker.save();
                             message.channel.send('No more enemies; ending combat.').catch(error => {console.error(error)});
                             for (characterName in tracker.characters) {
                                 if (tracker.characters[characterName].properties['initiative']) {
+                                    tracker.characters[characterName].properties['initiative'].delete();
                                     delete tracker.characters[characterName].properties['initiative'];
                                 }
                             }
