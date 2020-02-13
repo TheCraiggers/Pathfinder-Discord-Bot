@@ -1032,7 +1032,7 @@ class OmniTracker {
      * @returns {Character}
      */
     getCharacterFromAuthorID(ID) {
-        if (this.combat && this.characters[this.combatCurrentInit].owner == ID) {
+        if (this.combat && this.characters[this.combatCurrentInit] && this.characters[this.combatCurrentInit].owner == ID) {
             return this.characters[this.combatCurrentInit];
         } else {
             for (var characterName in this.characters) {
