@@ -113,7 +113,12 @@ class PropertyNotFoundError extends OmniError {
         this.name = this.constructor.name;
     }
 }
-
+class EffectNotFoundError extends OmniError {
+    constructor(effectName, characterName) {
+        super(`The effect "${effectName}" was not found on character ${characterName}.`);
+        this.name = this.constructor.name;
+    }
+}
 class Property {
     /**
      * Given a parsed JSON message of a saved Property object, returns a new Property object.
@@ -521,8 +526,15 @@ class Character {
     }
 
     removeEffect(effectName) {
-        delete this.effects[effectName];
-        return this;
+        let effect = this.effects[effectName.toLowerCase()];
+        if (effect) {
+            effect.delete();
+            delete this.effects[effectName];
+            return this;
+        } else {
+            throw new EffectNotFoundError(effectName, this.name);
+        }
+        
     }
 
     /**
@@ -1394,12 +1406,10 @@ function handleEffectCommands(command, message) {
                         message.reply('Invalid effect command.')
                         .catch(console.error);
                     }
-
-
-                    
-                    
                 })
-                .catch(console.error);
+                .catch(error => {
+                    OmniTracker.handleCommonErrors(message,error);
+                });
                 break;
 
         default:
