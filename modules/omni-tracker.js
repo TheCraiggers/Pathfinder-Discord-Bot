@@ -65,6 +65,7 @@ GM Commands:
 !omni set stat init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !next                                       (When in combat, move to next character's turn)
 !omni set owner Bob @Bob                    (Sets the controller of the character to a specific user in Discord)
+!omni roll stat Bob Perception+{1d4}        (Rolls Bob's perception stat and adds 1d4 to it)
 \`\`\`
 `;
 
