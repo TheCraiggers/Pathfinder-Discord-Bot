@@ -65,6 +65,7 @@ GM Commands:
 !omni set stat init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !next                                       (When in combat, move to next character's turn)
 !omni set owner Bob @Bob                    (Sets the controller of the character to a specific user in Discord)
+!omni roll stat Bob Perception+{1d4}        (Rolls Bob's perception stat and adds 1d4 to it)
 \`\`\`
 `;
 
@@ -323,6 +324,13 @@ class Character {
         return foo;
     }
 
+    /**
+     * Computes a stat or dice roll
+     * @param {String} stuff String containing what the roll
+     * @param {DiceRoller} roller Roller object
+     * @param {Number} depth Internal use only; for detecting circular references
+     * @returns {Object} {Result: Number, HumanReadable: Outfit fit for a reply}
+     */
     resolveReference(stuff, roller, depth) {
         //This will resolve properties and return the resolved value
         //This includes lookups for other stats, and any dice rolls that are needed.
@@ -602,6 +610,24 @@ class Enemy extends Character {
 }
 
 class OmniTracker {
+    /**
+     * Given a message, returns an OmniTracker object for that server.
+     * @param {Message} message 
+     * @returns {Promise} Promise for new OmniTracker
+     */
+    static getTracker(message) {
+        return new Promise(function(resolve, reject) {
+            OmniTracker.getBotDataMessages(message).then(data => {
+                resolve(new OmniTracker(data));
+            })
+        });
+    }
+
+    /**
+     * Givn a message will return all the data in the botdata channel
+     * @param {Message} message 
+     * @returns {Promise} Array of botdata
+     */
     static getBotDataMessages(message) {
         return new Promise(function(resolve, reject) {
             //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
@@ -653,6 +679,8 @@ class OmniTracker {
     static handleCommonErrors(message, error) {
         if (error instanceof OmniError) {
             message.reply(error.message).catch(err => {console.error(err)});
+        } else if (error.constructor.name == 'peg$SyntaxError') {
+            message.reply("Invalid dice notation. Please check your syntax.").catch(err => {console.error(err)});
         } else {
             console.error(error);
             message.reply("Sorry, an unknown error occurred. Please check your command syntax.").catch(err => {console.error(err)});
@@ -1076,7 +1104,7 @@ function handleCommand(message) {
             return;
         case 'r':
         case 'roll':
-            handleRollCommands(message);
+            handleRollAliasCommands(message);
             break;
         case 'heal':
         case 'damage':
@@ -1088,12 +1116,12 @@ function handleCommand(message) {
         case 'init':
             if (message.content == '!init') {
                 message.content = '!roll init:perception';
-                handleRollCommands(message);
+                handleRollAliasCommands(message);
             } else {
                 let parsed = message.content.match(/!init (?<skill>.+)/i);
                 if (parsed) {
                     message.content = `!roll init:${parsed.groups.skill.toLowerCase()}`;
-                    handleRollCommands(message);
+                    handleRollAliasCommands(message);
                 }
             }
             break;
@@ -1443,6 +1471,7 @@ function handleTimeCommands(command, message) {
     })
 }
 
+const rollPropertyRegex = /(((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
 function handlePropertyCommands(command, message) {
     switch (command.groups.verb) {
         case 'add':
@@ -1490,6 +1519,31 @@ function handlePropertyCommands(command, message) {
                     tracker.updateTrackers();
                 });
                 break;
+            case 'roll':
+                OmniTracker.getTracker(message).then(tracker => {
+                    let roller = new DiceRoller();
+                    let character = tracker.characters[command.groups.target.toLowerCase()];
+                    if (!character) {
+                        throw new CharacterNotFoundError(command.groups.target);
+                    }
+                    const stuffToRoll = command.groups.properties.match(rollPropertyRegex);
+                    const output = character.resolveReference(stuffToRoll.groups.sourceStat, roller);
+                    if (!Number.isInteger(output.result)) {
+                        throw "Did not get number from resolve reference";
+                    }
+                    if (stuffToRoll.groups.destinationStat) {
+                        character.setProperty(stuffToRoll.groups.destinationStat, output.result).then(function() {
+                            message.reply(`\`\`\`${stuffToRoll.groups.destinationStat} for ${character.name} has been set to ${output.result};${stuffToRoll.groups.rollComment}\n${output.humanReadable}\`\`\``)
+                        }).catch(console.error);
+                    } else {
+                        message.reply(`\`\`\`${stuffToRoll.groups.sourceStat} for ${character.name} is ${output.result};${stuffToRoll.groups.rollComment}\n${output.humanReadable}\`\`\``)
+                        .catch(console.error);
+                    }
+                }).catch(error => {
+                    OmniTracker.handleCommonErrors(message,error);
+                });
+                break;
+
 
         default:
             message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
@@ -1499,7 +1553,7 @@ function handlePropertyCommands(command, message) {
 }
 const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
 const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d\S+)(?<rollComment>.*)$/i;
-function handleRollCommands(message) {
+function handleRollAliasCommands(message) {
     const command = message.content.match(rollCommandRegex);
     let roller = new DiceRoller();
 
