@@ -323,6 +323,13 @@ class Character {
         return foo;
     }
 
+    /**
+     * Computes a stat or dice roll
+     * @param {String} stuff String containing what the roll
+     * @param {DiceRoller} roller Roller object
+     * @param {Number} depth Internal use only; for detecting circular references
+     * @returns {Object} {Result: Number, HumanReadable: Outfit fit for a reply}
+     */
     resolveReference(stuff, roller, depth) {
         //This will resolve properties and return the resolved value
         //This includes lookups for other stats, and any dice rolls that are needed.
@@ -602,6 +609,24 @@ class Enemy extends Character {
 }
 
 class OmniTracker {
+    /**
+     * Given a message, returns an OmniTracker object for that server.
+     * @param {Message} message 
+     * @returns {Promise} Promise for new OmniTracker
+     */
+    static getTracker(message) {
+        return new Promise(function(resolve, reject) {
+            OmniTracker.getBotDataMessages(message).then(data => {
+                resolve(new OmniTracker(data));
+            })
+        });
+    }
+
+    /**
+     * Givn a message will return all the data in the botdata channel
+     * @param {Message} message 
+     * @returns {Promise} Array of botdata
+     */
     static getBotDataMessages(message) {
         return new Promise(function(resolve, reject) {
             //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
@@ -1076,7 +1101,7 @@ function handleCommand(message) {
             return;
         case 'r':
         case 'roll':
-            handleRollCommands(message);
+            handleRollAliasCommands(message);
             break;
         case 'heal':
         case 'damage':
@@ -1088,12 +1113,12 @@ function handleCommand(message) {
         case 'init':
             if (message.content == '!init') {
                 message.content = '!roll init:perception';
-                handleRollCommands(message);
+                handleRollAliasCommands(message);
             } else {
                 let parsed = message.content.match(/!init (?<skill>.+)/i);
                 if (parsed) {
                     message.content = `!roll init:${parsed.groups.skill.toLowerCase()}`;
-                    handleRollCommands(message);
+                    handleRollAliasCommands(message);
                 }
             }
             break;
@@ -1499,7 +1524,7 @@ function handlePropertyCommands(command, message) {
 }
 const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
 const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d\S+)(?<rollComment>.*)$/i;
-function handleRollCommands(message) {
+function handleRollAliasCommands(message) {
     const command = message.content.match(rollCommandRegex);
     let roller = new DiceRoller();
 
@@ -1545,6 +1570,26 @@ function handleRollCommands(message) {
             });
         
     }
+}
+
+function handleRollCommands(command, message) {
+    OmniTracker.getTracker(message).then(tracker => {
+        let roller = new DiceRoller();
+        let character = command.groups.target.toLowerCase();
+        if (!character) {
+            throw new CharacterNotFoundError(command.groups.target);
+        }
+        const output = character.resolveReference(command.groups.sourceStat, roller);
+        if (!Number.isInteger(output.result)) {
+            throw "Did not get number from resolve reference";
+        }
+        
+
+
+
+    }).catch(error => {
+        OmniTracker.handleCommonErrors(error);
+    })
 }
 
 function handleInitNextCommand(message) {
