@@ -678,6 +678,8 @@ class OmniTracker {
     static handleCommonErrors(message, error) {
         if (error instanceof OmniError) {
             message.reply(error.message).catch(err => {console.error(err)});
+        } else if (error.constructor.name == 'peg$SyntaxError') {
+            message.reply("Invalid dice notation. Please check your syntax.").catch(err => {console.error(err)});
         } else {
             console.error(error);
             message.reply("Sorry, an unknown error occurred. Please check your command syntax.").catch(err => {console.error(err)});
@@ -1468,6 +1470,7 @@ function handleTimeCommands(command, message) {
     })
 }
 
+const rollPropertyRegex = /(((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
 function handlePropertyCommands(command, message) {
     switch (command.groups.verb) {
         case 'add':
@@ -1515,6 +1518,31 @@ function handlePropertyCommands(command, message) {
                     tracker.updateTrackers();
                 });
                 break;
+            case 'roll':
+                OmniTracker.getTracker(message).then(tracker => {
+                    let roller = new DiceRoller();
+                    let character = tracker.characters[command.groups.target.toLowerCase()];
+                    if (!character) {
+                        throw new CharacterNotFoundError(command.groups.target);
+                    }
+                    const stuffToRoll = command.groups.properties.match(rollPropertyRegex);
+                    const output = character.resolveReference(stuffToRoll.groups.sourceStat, roller);
+                    if (!Number.isInteger(output.result)) {
+                        throw "Did not get number from resolve reference";
+                    }
+                    if (stuffToRoll.groups.destinationStat) {
+                        character.setProperty(stuffToRoll.groups.destinationStat, output.result).then(function() {
+                            message.reply(`\`\`\`${stuffToRoll.groups.destinationStat} for ${character.name} has been set to ${output.result};${stuffToRoll.groups.rollComment}\n${output.humanReadable}\`\`\``)
+                        }).catch(console.error);
+                    } else {
+                        message.reply(`\`\`\`${stuffToRoll.groups.sourceStat} for ${character.name} is ${output.result};${stuffToRoll.groups.rollComment}\n${output.humanReadable}\`\`\``)
+                        .catch(console.error);
+                    }
+                }).catch(error => {
+                    OmniTracker.handleCommonErrors(message,error);
+                });
+                break;
+
 
         default:
             message.reply(`Sorry, I don't know how to ${command.groups.verb} a ${command.groups.noun} yet.`)
@@ -1570,26 +1598,6 @@ function handleRollAliasCommands(message) {
             });
         
     }
-}
-
-function handleRollCommands(command, message) {
-    OmniTracker.getTracker(message).then(tracker => {
-        let roller = new DiceRoller();
-        let character = command.groups.target.toLowerCase();
-        if (!character) {
-            throw new CharacterNotFoundError(command.groups.target);
-        }
-        const output = character.resolveReference(command.groups.sourceStat, roller);
-        if (!Number.isInteger(output.result)) {
-            throw "Did not get number from resolve reference";
-        }
-        
-
-
-
-    }).catch(error => {
-        OmniTracker.handleCommonErrors(error);
-    })
 }
 
 function handleInitNextCommand(message) {
