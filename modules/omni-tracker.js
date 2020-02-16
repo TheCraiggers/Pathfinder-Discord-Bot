@@ -128,7 +128,11 @@ class Property {
      * @returns {Property}
      */
     static newPropertyFromBotData(botData) {
-        return new Property(botData.propertyName, botData.currentValue, botData.isAboveFold, botData.character, botData.dataMessage);
+        if (botData.maxValue) {
+            return new PropertyRange(botData.propertyName, botData.currentValue, botData.maxValue, botData.isAboveFold, botData.character, botData.dataMessage);    
+        } else {
+            return new Property(botData.propertyName, botData.currentValue, botData.isAboveFold, botData.character, botData.dataMessage);
+        }
     }
     constructor(name, currentValue, isAboveFold, characterName, dataMessage) {
         this.propertyName = name;
@@ -402,7 +406,7 @@ class Character {
                 }
                 promises.push(this.setProperty(property.groups.propertyName, property.groups.propertyValue, important));
             } else {
-                promises.push(this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue));
+                promises.push(this.setPropertyRange(property.groups.propertyName, property.groups.propertyMinValue, property.groups.propertyMaxValue,important));
             }
             if (message) {
                 if (property.groups.propertyName.toLowerCase() == 'hp') {
@@ -551,14 +555,14 @@ class Character {
             let property = this.properties[propertyName.toLowerCase()];
             if (property) {
                 //Edit existing property
-                property.currentValue = value;
+                property.currentValue = currentValue;
                 property.maxValue = maxValue;
                 property.isAboveFold = isAboveFold;
                 return property.save();
             } else {
                 //Create new property
                 property = new PropertyRange(propertyName, currentValue, maxValue, isAboveFold, this.name);
-                this.properties[propertyName] = property;
+                this.properties[propertyName.toLowerCase()] = property;
                 return this.dataMessage.channel.send(JSON.stringify(property)).then(msg => {
                     property.dataMessage = msg;
                 });
@@ -1350,7 +1354,12 @@ function handlePlayerCommands(command, message) {
             .then(data => {
                 var tracker = new OmniTracker(data);
                 let character = tracker.characters[command.groups.target.toLowerCase()];
-                if (character && !character.enemy) {
+                if (!character) {
+                    throw new CharacterNotFoundError(command.groups.target);
+                } else {
+                    if (character.enemy) {
+                        gmOnlyCommand();
+                    }
                     let output = '```JSON\n';
                     output += `Name: ${character.name}\n\n`;
                     for (propertyName in character.properties) {
@@ -1358,17 +1367,9 @@ function handlePlayerCommands(command, message) {
                     }
                     output += '```';
                     message.reply(output).catch(error => {console.error(error)});
-                } else {
-                    message.reply(`Couldn't find a player with the name ${command.groups.target}. Please check your spelling!`)
-                    .catch(error => {
-                        console.error(error);
-                    })
-                    return;
                 }
-            })
-            .catch(error => {
-                message.reply('Ooops! Something went wrong. Double check your syntax!');
-                console.error(error);
+            }).catch(error => {
+                OmniTracker.handleCommonErrors(message,error);
             })
             break;
 
