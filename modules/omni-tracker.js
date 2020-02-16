@@ -30,6 +30,7 @@ If you don't like being fancy, '!roll init:{1d20+7}' still works.
 # Special / Reserved stats:
 HP: Character health
 Initiative: The chracter's rolled initiative for combat, used in tracker order
+TempHP: Temporary HP. These will be consumed first when damage is dealt.
 \`\`\`
 `;
 exampleHelpMessage = `
@@ -426,6 +427,50 @@ class Character {
         })
     }
 
+    /**
+     * Deal damage to this character. Temp HP is subtracted first. Saves character object and/or 
+     * @param {Number} amountOfDamage Amount of damage to deal to this character
+     * @returns {Promise} Promise of operation
+     */
+    dealDamage(amountOfDamage) {
+        let temphp = this.properties['temphp'];
+        if (temphp) {
+            temphp.currentValue -= amountOfDamage;
+            if (temphp.currentValue <= 0) {
+                //Damage was more than the TempHP remaining
+                return this.setHealth(this.HP.currentHP*1 + temphp.currentValue).then(() => {
+                    return temphp.delete()
+                }).then(() => {
+                    delete this.properties['temphp'];
+                }).catch(error => {
+                    console.error(error);
+                })
+            } else {
+                //TempHP soaked all the damage. Don't need to edit the character record then!
+                return temphp.save()
+            }
+        } else {
+            //No tempHP, just deal damage.
+            return this.setHealth(this.HP.currentHP*1 - amountOfDamage);
+        }
+    }
+
+    /**
+     * Heal this character. Saves character object.
+     * @param {Number} amountOfHeal Amount of damage to heal on this character
+     * @returns {Promise} Promise of data save.
+     */
+    healDamage(amountOfHeal) {
+        return this.setHealth(this.HP.currentHP*1 + amountOfHeal);
+    }
+
+
+    /**
+     * Directly sets the health of this character. Useful if you already know the exact health values.
+     * @param {Number} currentHP Current HP of character
+     * @param {Number} maxHP Current Max HP of character
+     * @returns {Promise} Promise of data save
+     */
     setHealth(currentHP, maxHP) {
         if (maxHP !== undefined)
             this.HP.maxHP = maxHP;
@@ -439,9 +484,7 @@ class Character {
             currentHP = this.HP.maxHP;
         }
         this.HP.currentHP = currentHP;
-        this.save();
-        
-        return this;
+        return this.save();
     }
 
     /**
@@ -1654,56 +1697,48 @@ function handleChangingHP(message) {
                 return;
             }
 
-            if (parsed.groups.heal_or_damage == 'damage') {
-                parsed.groups.delta *= -1;      //Damage is just negative healing!
-            } else {
-                parsed.groups.delta *= 1;       //Force to a number
-            }
-
             let character = tracker.characters[parsed.groups.target.toLowerCase()];
-            if (character == undefined) {
-                message.reply(`Could not find a character with that name!`);
-                return;
+            if (!character) {
+                throw new CharacterNotFoundError(parsed.groups.target);
             } else {
-                character.setHealth(character.HP.currentHP*1 + parsed.groups.delta);
-                character.showCharacterSynopsis(message.channel);
-                if (character.enemy && character.HP.currentHP == 0) {
-                    //Character was an enemy who died, remove and check to see if combat ends
-                    character.dataMessage.delete()
-                    .then(function () {
-                        return message.reply(`Enemy ${character.name} removed from combat.`);
-                    })
-                    .then(function() {
-                        return OmniTracker.getBotDataMessages(message);
-                    })
-                    .then(data => {
-                        tracker = new OmniTracker(data);
-                        let enemiesAlive = false;
-                        for (characterName in tracker.characters) {
-                            if (tracker.characters[characterName].enemy)
-                                enemiesAlive = true;
-                        }
-                        if (!enemiesAlive) {
-                            tracker.combat = false;
-                            delete tracker.combatCurrentInit;
-                            tracker.save();
-                            message.channel.send('No more enemies; ending combat.').catch(error => {console.error(error)});
-                            for (characterName in tracker.characters) {
-                                if (tracker.characters[characterName].properties['initiative']) {
-                                    tracker.characters[characterName].properties['initiative'].delete();
-                                    delete tracker.characters[characterName].properties['initiative'];
-                                }
-                            }
-                        }
-                        tracker.saveBotData();
-                        tracker.updateTrackers();
-                    })
-                    .catch(error => {console.error(error)});
+                if (parsed.groups.heal_or_damage == 'damage') {
+                    var damageFunctionPromise = character.dealDamage(parsed.groups.delta);
                 } else {
-                    tracker.saveBotData();
-                    tracker.updateTrackers();
+                    var damageFunctionPromise = character.healDamage(parsed.groups.delta);
                 }
+                damageFunctionPromise.then(() => {
+                    tracker.updateTrackers();
+                    character.showCharacterSynopsis(message.channel);
+                    if (character.enemy && character.HP.currentHP == 0) {
+                        //Character was an enemy who died, remove and check to see if combat ends
+                        character.delete().then(() => {
+                            delete tracker.characters[parsed.groups.target.toLowerCase()];
+                            return message.reply(`Enemy ${character.name} removed from combat.`);
+                        }).then(() => {
+                            let enemiesAlive = false;
+                            for (characterName in tracker.characters) {
+                                if (tracker.characters[characterName].enemy)
+                                    enemiesAlive = true;
+                            }
+                            if (!enemiesAlive) {
+                                tracker.combat = false;
+                                delete tracker.combatCurrentInit;
+                                tracker.save();
+                                message.channel.send('No more enemies; ending combat.').catch(error => {console.error(error)});
+                                for (characterName in tracker.characters) {
+                                    if (tracker.characters[characterName].properties['initiative']) {
+                                        tracker.characters[characterName].properties['initiative'].delete();
+                                        delete tracker.characters[characterName].properties['initiative'];
+                                    }
+                                }
+                                tracker.updateTrackers();
+                            }
+                        })
+                    }
+                })
             }
+        }).catch(error => {
+            OmniTracker.handleCommonErrors(message, error);
         });   
 }
 
