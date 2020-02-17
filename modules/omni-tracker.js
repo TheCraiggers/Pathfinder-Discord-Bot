@@ -1027,7 +1027,7 @@ class OmniTracker {
                             msg[1].edit(updatedTracker)
                             .catch(console.error);
                         } else if (msg[1].content.startsWith('```CSS\n[Omni GM Tracker]')) {
-                            msg[1].edit(updatedTracker)
+                            msg[1].edit(updatedGMTracker)
                             .catch(console.error);
                         }
                     }
