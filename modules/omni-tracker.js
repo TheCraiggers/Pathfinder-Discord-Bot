@@ -438,6 +438,7 @@ class Character {
      */
     dealDamage(amountOfDamage) {
         let temphp = this.properties['temphp'];
+        amountOfDamage = amountOfDamage*1;      //force to Number
         if (temphp) {
             temphp.currentValue -= amountOfDamage;
             if (temphp.currentValue <= 0) {
@@ -465,7 +466,7 @@ class Character {
      * @returns {Promise} Promise of data save.
      */
     healDamage(amountOfHeal) {
-        return this.setHealth(this.HP.currentHP*1 + amountOfHeal);
+        return this.setHealth(this.HP.currentHP*1 + amountOfHeal*1);
     }
 
 
