@@ -780,6 +780,46 @@ class OmniTracker {
         this.omniDataMessage.edit(JSON.stringify(this)).catch(error => { console.error(error)});
     }
 
+    /**
+     * Calls the function for the target. Automatically parses targets like %all or %players.
+     * Function passed must accept standard (command, message) parameters.
+     * @param {Function} func The function to call per target
+     * @param {RegExResult} command Parsed command regex
+     * @param {Message} message Message from Discord that spawned this request
+     */
+    callFunctionForCharacters(func, command, message) {
+        switch (command.groups.target.toLowerCase()) {
+            case '%players':
+                for (characterName in tracker.characters) {
+                    let character = tracker.characters[characterName];
+                    if (!character.enemy) {
+                        command.groups.target = character.name;
+                        func(command, message);
+                    }
+                }
+                break;
+            case '%enemies':
+                for (characterName in tracker.characters) {
+                    let character = tracker.characters[characterName];
+                    if (character.enemy) {
+                        command.groups.target = character.name;
+                        func(command, message);
+                    }
+                }
+                break;
+            case '%all':
+                for (characterName in tracker.characters) {
+                    let character = tracker.characters[characterName];
+                    command.groups.target = character.name;
+                    func(command, message);
+                }
+                break;
+            default:
+                func(command, message);
+                break;
+        }
+    }
+
     getDateText() {
         //Pathfinder's calendar is basically just ours with different names. Boring, but easy!
         var monthName;
@@ -1277,11 +1317,11 @@ function handlePlayerCommands(command, message) {
         case 'remove':
             gmOnlyCommand(message)
             .then(function() {
-                return OmniTracker.getBotDataMessages(message);
+                return OmniTracker.getTracker(message)
             })
-            .then(data => {
-                var tracker = new OmniTracker(data);
+            .then(tracker => {
                 command.groups.target = command.groups.target.toLowerCase();
+                tracker.callFunctionForCharacters()
                 let promises = [];
                 if (command.groups.target == '%enemies') {
                     for (characterName in tracker.characters) {
