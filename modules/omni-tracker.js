@@ -1597,7 +1597,7 @@ function handlePropertyCommands(command, message) {
     }  
 }
 const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
-const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d\S+)(?<rollComment>.*)$/i;
+const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d(\S+)?)(?<rollComment>.*)$/i;
 function handleRollAliasCommands(message) {
     const command = message.content.match(rollCommandRegex);
     let roller = new DiceRoller();
