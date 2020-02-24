@@ -42,7 +42,7 @@ Examples:
 !omni add player Bob AC:10 HP:18/20             (Add a new player Bob controlled by the person who typed the command.)
 !omni remove player Bob                         (Add a new player Bob controlled by the person who typed the command.)
 !omni set player Bob AC:20 HP:15/30             (Set Bob's AC to 20 and current HP to 15 of 30.)
-!omni add effect Bob dizzy 5 rounds             (Make Bob dizzy for 5 rounds.)
+!omni add effect Bob Frightened 5+ rounds       (Make Bob dizzy for 5 rounds. The + causes the duration to decrease at end of turn instead of beginning.)
 !omni add effect Bob sick 2 days                (Makes Bob sick for 2 days.)
 !omni remove effect Bob Dizzy                   (Remove Dizzy from Bob prematurely)
 !omni add effect %players Inspired 1 round      (Gives all PCs the Inspired effect)
