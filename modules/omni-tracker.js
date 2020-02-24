@@ -189,10 +189,11 @@ class Effect {
         return new Effect(botData);
     }
 
-    constructor({effectName = undefined, affectedCharacterName = undefined, durationInSeconds = undefined, dataMessage = undefined}) {
+    constructor({effectName = undefined, affectedCharacterName = undefined, durationInSeconds = undefined, dataMessage = undefined, endOfTurnEffect = false}) {
         this.effectName = effectName;
         this.affectedCharacterName = affectedCharacterName;
         this.dataMessage = dataMessage;
+        this.endOfTurnEffect = endOfTurnEffect;
         if (durationInSeconds) {
             this.durationInSeconds = durationInSeconds;
         } else {
@@ -257,17 +258,18 @@ class Effect {
         if (this.durationInSeconds === Infinity) {
             return '';
         } else if (this.durationInSeconds >= 86400) {
-            var foo = Math.round(this.durationInSeconds/86400);
+            let foo = Math.round(this.durationInSeconds/86400);
             return `${foo} day${(foo>1) ? 's':''}`;
         } else if (this.durationInSeconds >= 3600) {
-            var foo = Math.round(this.durationInSeconds/3600);
+            let foo = Math.round(this.durationInSeconds/3600);
             return `${foo} hour${(foo>1) ? 's':''}`;
         } else if (this.durationInSeconds >= 60) {
-            var foo = Math.round(this.durationInSeconds/60);
+            let foo = Math.round(this.durationInSeconds/60);
             return `${foo} minute${(foo>1) ? 's':''}`;
         } else {
-            var foo = Math.round(this.durationInSeconds/6);
-            return `${foo} round${(foo>1) ? 's':''}`;
+            let endOfTurnEffect = (this.endOfTurnEffect ? '+':'');
+            let foo = Math.round(this.durationInSeconds/6);
+            return `${foo}${endOfTurnEffect} round${(foo>1) ? 's':''}`;
         }
     }
 }
@@ -600,6 +602,12 @@ class Character {
      * @returns {Effect}
      */
     addEffect(effectName, durationString) {
+        let endOfTurnEffect = false;
+        if (durationString.indexOf('+') > 0) {
+            //For now I don't care where the + sign is. it means the effect ends at the end of the char's turn.
+            durationString = durationString.replace('+','');
+            endOfTurnEffect = true;
+        }
         let durationInSeconds = Effect.translateDurationStringToSeconds(durationString);
         let existingEffect = this.effects[effectName.toLowerCase()];
         if (existingEffect) {
@@ -610,7 +618,7 @@ class Character {
             }
             return existingEffect;
         } else {
-            let newEffect = this.effects[effectName.toLowerCase()] = new Effect({effectName: effectName, durationInSeconds: durationInSeconds, affectedCharacterName: this.name});
+            let newEffect = this.effects[effectName.toLowerCase()] = new Effect({effectName: effectName, durationInSeconds: durationInSeconds, affectedCharacterName: this.name, endOfTurnEffect: endOfTurnEffect});
             this.dataMessage.channel.send(JSON.stringify(newEffect)).then(msg => {
                 newEffect.dataMessage = msg;
                 return newEffect;
@@ -925,19 +933,29 @@ class OmniTracker {
         });
     }
 
-    increaseTimeForCharacter(increaseInSeconds, character, message) {
+    /**
+     * 
+     * @param {Number} increaseInSeconds Number of seconds to increase by. Almost always 6 for this function.
+     * @param {Boolean} endOfTurn Is the the beginning or end of the character's turn? NOTE: If undefined, decreases the duration of both types of effects!
+     * @param {Character} character Character to process.
+     * @param {Message} message The message that invoked this command.
+     */
+    increaseTimeForCharacter(increaseInSeconds, endOfTurn, character, message) {
         //Combat is weird in that while a round is 6 seconds, effects don't end at the end of the round, rather the start of the character turn.
         //So we need to treat combat different, and only increase time for one character's effects at start of their turn when in combat.
         var expiredEffectsMessage = '';
         for (let effectName in character.effects) {
             let effect = character.effects[effectName];
-            effect.durationInSeconds -= increaseInSeconds;
-            if (effect.durationInSeconds <= 0) {
-                expiredEffectsMessage += `<@${character.owner}>, ${effectName} has ended on ${character.name}.\n`;
-                effect.delete();
-                delete character.effects[effectName];
-            } else {
-                effect.save();
+            if (effect.endOfTurnEffect == endOfTurn || endOfTurn === undefined) {
+                effect.durationInSeconds -= increaseInSeconds;
+                if (effect.durationInSeconds <= 0) {
+                    expiredEffectsMessage += `<@${character.owner}>, ${effectName} has ended on ${character.name}.\n`;
+                    
+                    effect.delete();
+                    delete character.effects[effectName];
+                } else {
+                    effect.save();
+                }
             }
         }
         if (expiredEffectsMessage) {
@@ -987,7 +1005,7 @@ class OmniTracker {
 
         for (let characterName in this.characters) {
             const character = this.characters[characterName];
-            this.increaseTimeForCharacter(increaseInSeconds, character, message);
+            this.increaseTimeForCharacter(increaseInSeconds, undefined, character, message);
         }
     }
 
@@ -1656,6 +1674,7 @@ function handleInitNextCommand(message) {
                 if (tracker.combatCurrentInit === undefined) {
                     tracker.combatCurrentInit = sortedCharacterNames[0];
                 } else {
+                    tracker.increaseTimeForCharacter(6, true, tracker.characters[tracker.combatCurrentInit], message);
                     for (let i = 0; i < sortedCharacterNames.length; i++) {
                         if (sortedCharacterNames[i] == tracker.combatCurrentInit) {
                             if (i+1 >= sortedCharacterNames.length || tracker.characters[sortedCharacterNames[i+1]].properties['initiative'] == undefined) {      //Are we at the end of the list?
@@ -1672,7 +1691,7 @@ function handleInitNextCommand(message) {
                 if (character.name.endsWith('s')) {
                     suffix = "'";
                 }
-                tracker.increaseTimeForCharacter(6, character, message);        //each round is 6 seconds
+                tracker.increaseTimeForCharacter(6, false, character, message);        //each round is 6 seconds
                 message.channel.send(`Hey <@${character.owner}> it's ${character.name}${suffix} turn!`);
 
                 tracker.save();
