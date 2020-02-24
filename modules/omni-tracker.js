@@ -1460,6 +1460,7 @@ function handleEffectCommands(command, message) {
                     let effect = command.groups.properties.match(effectRegex);
 
                     if (effect) {
+                        effect.groups.effectName = effect.groups.effectName.replace(/'/g,"");
                         switch (command.groups.target.toLowerCase()) {
                             case '%players':
                                 for (characterName in tracker.characters) {
