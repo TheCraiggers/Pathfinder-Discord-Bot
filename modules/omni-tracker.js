@@ -797,35 +797,40 @@ class OmniTracker {
      * @param {Message} message Message from Discord that spawned this request
      */
     callFunctionForCharacters(func, command, message) {
-        switch (command.groups.target.toLowerCase()) {
-            case '%players':
-                for (characterName in tracker.characters) {
-                    let character = tracker.characters[characterName];
-                    if (!character.enemy) {
+        message.channel.startTyping();
+        try {
+            switch (command.groups.target.toLowerCase()) {
+                case '%players':
+                    for (characterName in tracker.characters) {
+                        let character = tracker.characters[characterName];
+                        if (!character.enemy) {
+                            command.groups.target = character.name;
+                            func(command, message);
+                        }
+                    }
+                    break;
+                case '%enemies':
+                    for (characterName in tracker.characters) {
+                        let character = tracker.characters[characterName];
+                        if (character.enemy) {
+                            command.groups.target = character.name;
+                            func(command, message);
+                        }
+                    }
+                    break;
+                case '%all':
+                    for (characterName in tracker.characters) {
+                        let character = tracker.characters[characterName];
                         command.groups.target = character.name;
                         func(command, message);
                     }
-                }
-                break;
-            case '%enemies':
-                for (characterName in tracker.characters) {
-                    let character = tracker.characters[characterName];
-                    if (character.enemy) {
-                        command.groups.target = character.name;
-                        func(command, message);
-                    }
-                }
-                break;
-            case '%all':
-                for (characterName in tracker.characters) {
-                    let character = tracker.characters[characterName];
-                    command.groups.target = character.name;
+                    break;
+                default:
                     func(command, message);
-                }
-                break;
-            default:
-                func(command, message);
-                break;
+                    break;
+            }
+        } finally {
+            message.channel.stopTyping();
         }
     }
 
