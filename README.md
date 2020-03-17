@@ -61,10 +61,10 @@ I've made a couple of design choices that I hope won't bite me later.
 
 ## Get Things Runnings
 
-Install [Git](https://git-scm.com/)
-Open a command prompt (bash, powershell, cmd, zsh, etc)
-`C:\Users\user>                        git clone https://github.com/TheCraiggers/Pathfinder-Discord-Bot.git`
-`C:\Users\user\Pathfinder-Discord-Bot> npm install`
-Update Line 4 `index.js` with your Discord Token
-`C:\Users\user\Pathfinder-Discord-Bot> node .\index.js`
-Add bot to server. Lots of tutorials out there but generally will use n invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
+* Install [Git](https://git-scm.com/)
+* Open a command prompt (bash, powershell, cmd, zsh, etc)
+* `C:\Users\user>                        git clone https://github.com/TheCraiggers/Pathfinder-Discord-Bot.git`
+* `C:\Users\user\Pathfinder-Discord-Bot> npm install`
+* Update Line 4 `index.js` with your Discord Token
+* `C:\Users\user\Pathfinder-Discord-Bot> node .\index.js`
+* Add bot to server. Lots of tutorials out there but generally will use n invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
