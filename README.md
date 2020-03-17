@@ -58,3 +58,13 @@ I've made a couple of design choices that I hope won't bite me later.
 
 * I don't want a huge backend database. Everything will either be stateless, store state in the discord guild itself, or derive state from previous messages. This may make bot interactions a tad slower (although hopefully not noticable), but will hopefully dramatically ease my job if I have to scale this later.
 * Bot commands should be human readable. Saving keystrokes in bot commands is only nice if your players can remember the archaic syntax. This also helps mobile Discord players, as mobile keyboards assume you're trying to type English. Shortcuts will be made available for commands that are used repeatedly.
+
+## Get Things Runnings
+
+Install [Git](https://git-scm.com/)
+Open a command prompt (bash, powershell, cmd, zsh, etc)
+`C:\Users\user>                        git clone https://github.com/TheCraiggers/Pathfinder-Discord-Bot.git`
+`C:\Users\user\Pathfinder-Discord-Bot> npm install`
+Update Line 4 `index.js` with your Discord Token
+`C:\Users\user\Pathfinder-Discord-Bot> node .\index.js`
+Add bot to server. Lots of tutorials out there but generally will use n invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
