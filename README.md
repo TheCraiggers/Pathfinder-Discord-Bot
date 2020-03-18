@@ -67,4 +67,4 @@ I've made a couple of design choices that I hope won't bite me later.
 * `C:\Users\user\Pathfinder-Discord-Bot> npm install`
 * Update Line 4 `index.js` with your Discord Token
 * `C:\Users\user\Pathfinder-Discord-Bot> node .\index.js`
-* Add bot to server. Lots of tutorials out there but generally will use n invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
+* Add bot to server. Lots of tutorials out there but generally will use an invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
