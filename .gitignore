@@ -61,3 +61,5 @@ typings/
 .next
 
 .vscode/
+src/config.json
+dist/config.json

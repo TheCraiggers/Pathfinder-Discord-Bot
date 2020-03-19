@@ -1,25 +1,31 @@
 # Pathfinder Discord Bot
-*A bot to help Pathfinder 2e players using Discord.*
+
+_A bot to help Pathfinder 2e players using Discord._
 
 ## Features
-* Pathfinder 2e spell/feat/class/etc lookup using the awesome [Pathfinder 2 Easy Library](http://pf2.easytool.es/)
-* Initiative tracker with details hidden for players
-* Tracking HP, AC, and any other stat or property you can think of (supporting numerical and textual values)
-* Dice roller
-* A robust spreadsheet-like reference system allowing for things like Perception={1d20+[Expert]+2}
-* Time of day and date tracker
-* Condition tracker that automatically updates durations based on elapsed time
+
+- Pathfinder 2e spell/feat/class/etc lookup using the awesome [Pathfinder 2 Easy Library](http://pf2.easytool.es/)
+- Initiative tracker with details hidden for players
+- Tracking HP, AC, and any other stat or property you can think of (supporting numerical and textual values)
+- Dice roller
+- A robust spreadsheet-like reference system allowing for things like Perception={1d20+[Expert]+2}
+- Time of day and date tracker
+- Condition tracker that automatically updates durations based on elapsed time
 
 ## Why?
+
 There are plenty of dice bots out there, but I wanted something to help track game state. And while there are some full-featured bots like Avrae, there are always quirks when using them for Pathfinder 2e, such as when players and monsters tie for initiative.
 
 Also, I wanted to create something to help my GM and fellow players.
 
 ## Looking up Pathfinder terms
+
 Once the bot is in your channel, you can use the following to lookup a term and have it delivered directly to your channel:
-* `!lookup <Pathfinder term>`
+
+- `!lookup <Pathfinder term>`
 
 ## Getting started with the tracker board for Players
+
 The omni tracker started out as a simple initiative tracker, but eventually became a massive feature that tracks nearly everything about a character. You can use the `!omni help` command in any channel to get a PM with various examples, but something as massive as the omni tracker demanded a tutorial to help players get started quickly. The following commands will add your character and set up some basic stats. Note that you could combine these into one long command; I've split them up into hopefully easier-to-digest chunks.
 
 1. Add your PC and some basic stats with the command `!omni add player CharacterName HP:20/20`. Replace the CharacterName with your name, and the HP numbers with your character's.
@@ -32,6 +38,7 @@ The omni tracker started out as a simple initiative tracker, but eventually beca
 1. Adding other skills, ability scores, and other stuff is left for an excercise to the reader.
 
 ## Getting started as a GM
+
 So your players have aded their characters and they have exchanged gotten past the typical character introductions. It's time to fight! Let's go through the usual commands you'll need during an encounter.
 
 1. Instruct your players to roll for initiative using some variation of the `!init` command.
@@ -44,27 +51,36 @@ So your players have aded their characters and they have exchanged gotten past t
 1. Every each turn is complete, use `!next` to advance to the next character.
 1. A PC attacks a wolf and gets a crit, dealing 30 points of damage and killing it in one blow. `!damage Wolf1 30` will deal 30 points to it. The bot automatically removes it from combat as that's more than its max health.
 1. Eventually, the last wolf goes down. The bot ends the combat automatically and clears the initiative numbers.
-1. A player wants to use TreatWounds, which has a cooldown of 1 hour. Use `!omni add effect WoundsTreated 1 hour` to add a note to their character. 
+1. A player wants to use TreatWounds, which has a cooldown of 1 hour. Use `!omni add effect WoundsTreated 1 hour` to add a note to their character.
 1. They then walk for a few hours. Use `!time 3 hours` to move time ahead 3 hours. The WoundsTreated note automatically is removed.
 
 ## Requirements
-* Node JS 13+
-* Everything in the packages.json
-* If you're running this on a headless Linux server, you may need some X dependencies for the instance of Chrome used to lookup terms. Those can be found here: https://github.com/puppeteer/puppeteer/blob/master/docs/troubleshooting.md
-* In order to use the omni commands you'll need a hidden bot-data channel for the bot to save state in. This will be automated in the future hopefully.
+
+- Node JS 13+
+- Everything in the packages.json
+- If you're running this on a headless Linux server, you may need some X dependencies for the instance of Chrome used to lookup terms. Those can be found here: https://github.com/puppeteer/puppeteer/blob/master/docs/troubleshooting.md
+- In order to use the omni commands you'll need a hidden bot-data channel for the bot to save state in. This will be automated in the future hopefully.
 
 ## Design choices
-I've made a couple of design choices that I hope won't bite me later. 
 
-* I don't want a huge backend database. Everything will either be stateless, store state in the discord guild itself, or derive state from previous messages. This may make bot interactions a tad slower (although hopefully not noticable), but will hopefully dramatically ease my job if I have to scale this later.
-* Bot commands should be human readable. Saving keystrokes in bot commands is only nice if your players can remember the archaic syntax. This also helps mobile Discord players, as mobile keyboards assume you're trying to type English. Shortcuts will be made available for commands that are used repeatedly.
+I've made a couple of design choices that I hope won't bite me later.
+
+- I don't want a huge backend database. Everything will either be stateless, store state in the discord guild itself, or derive state from previous messages. This may make bot interactions a tad slower (although hopefully not noticable), but will hopefully dramatically ease my job if I have to scale this later.
+- Bot commands should be human readable. Saving keystrokes in bot commands is only nice if your players can remember the archaic syntax. This also helps mobile Discord players, as mobile keyboards assume you're trying to type English. Shortcuts will be made available for commands that are used repeatedly.
 
 ## Get Things Running
 
-* Install [Git](https://git-scm.com/)
-* Open a command prompt (bash, powershell, cmd, zsh, etc)
-* `C:\Users\user>                        git clone https://github.com/TheCraiggers/Pathfinder-Discord-Bot.git`
-* `C:\Users\user\Pathfinder-Discord-Bot> npm install`
-* Update Line 4 `index.js` with your Discord Token
-* `C:\Users\user\Pathfinder-Discord-Bot> node .\index.js`
-* Add bot to server. Lots of tutorials out there but generally will use an invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
+- Install [Git](https://git-scm.com/)
+- Open a command prompt (bash, powershell, cmd, zsh, etc)
+- `C:\Users\user> git clone https://github.com/TheCraiggers/Pathfinder-Discord-Bot.git`
+- `C:\Users\user\Pathfinder-Discord-Bot> npm install`
+- Create `config.json` in the `src` folder. Add:
+
+```json
+{
+  "token": "insertDiscordTokenHere"
+}
+```
+
+- `C:\Users\user\Pathfinder-Discord-Bot> node .\index.js`
+- Add bot to server. Lots of tutorials out there but generally will use an invite url like: `https://discordapp.com/api/oauth2/authorize?client_id=<BOTID>2&permissions=8&scope=bot`
