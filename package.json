@@ -6,7 +6,9 @@
   "dependencies": {
     "@types/jest": "^25.1.4",
     "@types/node": "^13.9.2",
+    "@types/tmp": "^0.1.0",
     "@types/ws": "^7.2.3",
+    "axios": "^0.19.2",
     "curlrequest": "^1.0.1",
     "discord.js": "^12.0.2",
     "jest": "^25.1.0",
@@ -18,10 +20,12 @@
     "tmp": "^0.1.0",
     "tslint": "^6.1.0",
     "tslint-config-prettier": "^1.18.0",
-    "tslint-eslint-rules": "^5.4.0",
-    "typescript": "^3.8.3"
+    "tslint-eslint-rules": "^5.4.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "typescript": "^3.8.3",
+    "typescript-tools": "^0.3.1"
+  },
   "scripts": {
     "test": "ts-jest",
     "tsc": "tsc",

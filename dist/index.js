@@ -10,7 +10,7 @@ if (discordToken === "insertDiscordTokenHere")
     throw "No discord token found! Create config.json and add your Discord Bot Token";
 client.on("ready", () => {
     if (client.user != null) {
-        console.log(`Logged in as ${client.user.tag}!`);
+        console.log(`Logged in as ${client.user.tag}!!`);
     }
     else {
         throw "Could not log in! Check your settings.";
