@@ -35,10 +35,6 @@ function lookupTerm(message:Message) {
   const findSearchTerm: RegExp = /! ?lookup ([\w ]+)\(?(\d+)?\)?/i;
   let parsedMessageContent:RegExpMatchArray|null = message.content.match(findSearchTerm);
   
-  if (parsedMessageContent) {
-    message.reply('Invalid lookup command! Usage is !lookup <search term>')
-    .catch(err => (console.error(err)));
-  }
   var searchTerm: string = parsedMessageContent![1];
   if (parsedMessageContent) {
     let disambiguousSelector = parsedMessageContent[2];
@@ -51,16 +47,20 @@ function lookupTerm(message:Message) {
         ")</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
       "mis"
     );
-  const findResultExtended = new RegExp(
-    "<strong>(.*?)</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
-    "mis"
-  );
+    const findResultExtended = new RegExp(
+      "<strong>(.*?)</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
+      "mis"
+    );
 
-   axios.post('https://pf2.easytool.es/php/search.php', { name: searchTerm })
-  .then(parseEasyToolSearchResultFucnction)
-  .catch(function (error: any) {
-    console.log(error);
-  });
+    axios.post('https://pf2.easytool.es/php/search.php', { name: searchTerm })
+    .then(parseEasyToolSearchResultFunction)
+    .catch(function (error: any) {
+      console.log(error);
+    });
+  } else {
+    message.reply('Invalid lookup command! Usage is !lookup <search term>')
+    .catch(err => (console.error(err)));
+  }
 }
 
 const parseEasyToolSearchResultFunction = async function parseEasyToolSearchResult(err, response){
