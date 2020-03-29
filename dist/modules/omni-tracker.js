@@ -692,13 +692,13 @@ class OmniTracker {
         return new Promise(function (resolve, reject) {
             //First, look for existing data in the Bot Data channel. If we find it, use it. Else, create it.
             let botDatum = [];
-            var botDataChannel = message.guild.channels.find(msg => msg.name == "omni-data");
+            var botDataChannel = message.guild.channels.cache.find(msg => msg.name == "omni-data");
             if (!botDataChannel) {
                 message.reply("Please use !omni setup first!");
             }
             else {
                 (async function getAllMessages() {
-                    let lastCollection = await botDataChannel.fetchMessages({
+                    let lastCollection = await botDataChannel.messages.fetch({
                         limit: 100
                     });
                     let lastSnowflake = null;
@@ -711,7 +711,7 @@ class OmniTracker {
                             if (data.type == "OmniTracker")
                                 var omniData = true;
                         }
-                        lastCollection = await botDataChannel.fetchMessages({
+                        lastCollection = await botDataChannel.messages.fetch({
                             limit: 100,
                             before: lastSnowflake
                         });
@@ -788,7 +788,7 @@ class OmniTracker {
                     }
                     break;
                 case "OmniTracker":
-                    this.time = new moment_1.default(data.date).utc();
+                    this.time = new moment_1(data.date).utc();
                     this.combatCurrentInit = data.combatCurrentInit;
                     this.omniDataMessage = data.dataMessage;
                     break;
@@ -1311,7 +1311,7 @@ function handleTrackerCommands(command, message) {
                 .then(function (data) {
                 //Using the data, we can now construct an Omni Tracker class object and use it to
                 //create the message and pin it.
-                omniTracker = new OmniTracker(data);
+                let omniTracker = new OmniTracker(data);
                 return message.channel.send(omniTracker.generateOmniTrackerMessageText());
             })
                 .catch(console.error);
