@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 var helpMessage = `
 \`\`\`
@@ -706,41 +697,39 @@ class OmniTracker {
                 message.reply("Please use !omni setup first!");
             }
             else {
-                (function getAllMessages() {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        let lastCollection = yield botDataChannel.fetchMessages({
-                            limit: 100
-                        });
-                        let lastSnowflake = null;
-                        while (lastCollection.size > 0) {
-                            for (const msg of lastCollection) {
-                                let data = JSON.parse(msg[1].content); //TODO: let class functions parse their JSON
-                                lastSnowflake = msg[0];
-                                data.dataMessage = msg[1];
-                                botDatum.push(data);
-                                if (data.type == "OmniTracker")
-                                    var omniData = true;
-                            }
-                            lastCollection = yield botDataChannel.fetchMessages({
-                                limit: 100,
-                                before: lastSnowflake
-                            });
-                        }
-                        if (!omniData) {
-                            //No Omni Tracker data found. Create it!
-                            let newOmniObject = { type: "OmniTracker", date: 0, combat: null };
-                            botDataChannel
-                                .send(JSON.stringify(newOmniObject))
-                                .then(function (newBotDataMessage) {
-                                newOmniObject.message = newBotDataMessage;
-                                botDatum.push(newOmniObject);
-                                resolve(botDatum);
-                            });
-                        }
-                        else {
-                            resolve(botDatum);
-                        }
+                (async function getAllMessages() {
+                    let lastCollection = await botDataChannel.fetchMessages({
+                        limit: 100
                     });
+                    let lastSnowflake = null;
+                    while (lastCollection.size > 0) {
+                        for (const msg of lastCollection) {
+                            let data = JSON.parse(msg[1].content); //TODO: let class functions parse their JSON
+                            lastSnowflake = msg[0];
+                            data.dataMessage = msg[1];
+                            botDatum.push(data);
+                            if (data.type == "OmniTracker")
+                                var omniData = true;
+                        }
+                        lastCollection = await botDataChannel.fetchMessages({
+                            limit: 100,
+                            before: lastSnowflake
+                        });
+                    }
+                    if (!omniData) {
+                        //No Omni Tracker data found. Create it!
+                        let newOmniObject = { type: "OmniTracker", date: 0, combat: null };
+                        botDataChannel
+                            .send(JSON.stringify(newOmniObject))
+                            .then(function (newBotDataMessage) {
+                            newOmniObject.message = newBotDataMessage;
+                            botDatum.push(newOmniObject);
+                            resolve(botDatum);
+                        });
+                    }
+                    else {
+                        resolve(botDatum);
+                    }
                 })();
             }
         });

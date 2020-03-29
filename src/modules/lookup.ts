@@ -1,7 +1,8 @@
-import { Pageres } from "pageres";
-const axios = require('axios');
+const Pageres = require("pageres");
+import { AxiosError, AxiosResponse } from "axios";
 import { dirSync, setGracefulCleanup } from "tmp";
-import { Client, Message, PartialMessage } from "discord.js";
+import { Client, Message, CollectorFilter, Collection } from "discord.js";
+const axios = require("axios");
 
 export default class lookup {
   constructor(client: Client) {
@@ -13,8 +14,8 @@ export default class lookup {
         }
       }
     });
-    client.on("messageUpdate", (oldMessage: PartialMessage | Message, newMessage: PartialMessage | Message) => {
-      if (lookupCommandRegex.test(newMessage.content?)) {
+    client.on("messageUpdate", (oldMessage: Message, newMessage: Message) => {
+      if (lookupCommandRegex.test(newMessage.content!)) {
         if (newMessage instanceof Message){
           lookupTerm(newMessage);
         }
@@ -26,35 +27,21 @@ export default class lookup {
 
 function lookupTerm(message:Message) {
   var ID: number = 0;
-  var searchResults = [];
 
   if (!message) {
     return;
   }
 
-  const findSearchTerm: RegExp = /! ?lookup ([\w ]+)\(?(\d+)?\)?/i;
+  const findSearchTerm: RegExp = /! ?lookup ([\w ]+)/i;
   let parsedMessageContent:RegExpMatchArray|null = message.content.match(findSearchTerm);
   
   var searchTerm: string = parsedMessageContent![1];
   if (parsedMessageContent) {
-    let disambiguousSelector = parsedMessageContent[2];
-    let disambiguousMessageText: string = "Found more than one possible term. Please let me know which one to look up by simply responding with the number.\n\n";
-    let disambiguousMessageCount: number = 0;
-    const findID = /value='(\d+)'/i;
-    const findResult = new RegExp(
-      "<strong>(" +
-        searchTerm +
-        ")</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
-      "mis"
-    );
-    const findResultExtended = new RegExp(
-      "<strong>(.*?)</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
-      "mis"
-    );
-
     axios.post('https://pf2.easytool.es/php/search.php', { name: searchTerm })
-    .then(parseEasyToolSearchResultFunction)
-    .catch(function (error: any) {
+    .then((response: AxiosResponse<string>) => { 
+      parseEasyToolSearchResult(response, searchTerm, message) 
+    })
+    .catch(function (error: AxiosError) {
       console.log(error);
     });
   } else {
@@ -63,10 +50,23 @@ function lookupTerm(message:Message) {
   }
 }
 
-const parseEasyToolSearchResultFunction = async function parseEasyToolSearchResult(err, response){
-      responses = response.split("<button");
-      for (parsedMessageContent of responses) {
-        result = findResult.exec parsedMessageContent);
+const parseEasyToolSearchResult = async function(response: AxiosResponse<string>, searchTerm:string, message: Message){
+      let responses:string[] = response.data.split("<button");
+      let searchResults:RegExpExecArray[] = [];
+      let disambiguousMessageText: string = "Found more than one possible term. Please let me know which one to look up by simply responding with the number.\n\n";
+      let disambiguousMessageCount: number = 0;
+      const findResultExtended: RegExp = new RegExp(
+        "<strong>(.*?)</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
+        "mis"
+      );
+      const findResult: RegExp = new RegExp(
+        "<strong>(" +
+          searchTerm +
+          ")</strong>.*<small>(.*?)</small>.*value='(\\d+?)'",
+        "mis"
+      );
+      for (const response of responses) {
+        let result = findResult.exec(response);
         if (result) {
           searchResults.push(result);
           disambiguousMessageCount++;
@@ -83,8 +83,8 @@ const parseEasyToolSearchResultFunction = async function parseEasyToolSearchResu
       }
       console.log(searchResults);
       if (!searchResults || searchResults.length == 0) {
-        for  parsedMessageContent of responses) {
-          result = findResultExtended.exec parsedMessageContent);
+        for (const response of responses) {
+          let result = findResultExtended.exec(response);
           if (result) {
             searchResults.push(result);
             disambiguousMessageCount++;
@@ -108,26 +108,23 @@ const parseEasyToolSearchResultFunction = async function parseEasyToolSearchResu
       }
   
       if (searchResults.length == 1) {
-        ID = searchResults[0][3];
-        getImageAndSend(message, ID);
-      } else if (disambiguousSelector) {
-        ID = searchResults[disambiguousSelector - 1][3];
+        let ID:number = Number.parseInt(searchResults[0][3]);
         getImageAndSend(message, ID);
       } else {
         message
           .reply(disambiguousMessageText)
           .then(disambiguousMessageMessage => {
-            const filter = msg =>
-              /^\d+$/.test(msg.content) && msg.author.id == message.author.id;
+            // make sure reply is a simple number and the search "author" is the sender
+            const filter: CollectorFilter = msg => /^\d+$/.test(msg.content) && msg.author.id == message.author.id;
   
             message.channel
               .awaitMessages(filter, { max: 1, time: 30000, errors: ["time"] })
               .then(msg => {
-                msg = msg.first();
+                let firstMessage: Message = msg.first()!;
                 disambiguousMessageMessage.delete().catch(console.error);
-                ID = searchResults[parseInt(msg.content) - 1][3];
+                let ID:number = Number.parseInt(searchResults[parseInt(firstMessage.content) - 1][3]);
                 getImageAndSend(message, ID);
-                msg.delete().catch(console.error);
+                firstMessage.delete().catch(console.error);
               })
               .catch(err => {
                 console.log(err);
@@ -139,14 +136,14 @@ const parseEasyToolSearchResultFunction = async function parseEasyToolSearchResu
     }
 
 
-function getImageAndSend(message, ID) {
+function getImageAndSend(message:Message, ID:number) {
   if (ID < 1) throw `Invalid ID given. I can't lookup ${ID}`;
   let tmpdir = dirSync();
   console.log("Getting screenshot...");
   let pageres = new Pageres({
     delay: 0,
     selector: "article.result",
-    filename:  parsedMessageContent"
+    filename:  'foo'
   })
     .src("https://pf2.easytool.es/index.php?id=" + ID, ["1024x768"], {
       crop: true
@@ -154,11 +151,11 @@ function getImageAndSend(message, ID) {
     .dest(tmpdir.name)
     .run()
     .then(function() {
-      console.log("Saving to " + tmpdir.name + "/" +  parsedMessageContent.png");
+      console.log("Saving to " + tmpdir.name + "/foo.png");
       message.channel
         .send({
           files: [
-            { attachment: tmpdir.name + "/" +  parsedMessageContent.png", name: "results.png" }
+            { attachment: tmpdir.name + "/foo.png", name: "results.png" }
           ]
         })
         .then(msg => {
