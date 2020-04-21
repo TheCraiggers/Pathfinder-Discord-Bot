@@ -1712,14 +1712,14 @@ function handleChangingHP(message) {
     OmniTracker.getBotDataMessages(message)
         .then(data => {
             let tracker = new OmniTracker(data);
-            let parsed = message.content.match(changeHpRegex);
+            let parsed = message.content.toLowerCase().match(changeHpRegex);
 
             if (!parsed) {
                 message.reply('Invalid command syntax!');
                 return;
             }
 
-            let character = tracker.characters[parsed.groups.target.toLowerCase()];
+            let character = tracker.characters[parsed.groups.target];
             if (!character) {
                 throw new CharacterNotFoundError(parsed.groups.target);
             } else {
