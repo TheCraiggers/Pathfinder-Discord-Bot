@@ -1761,49 +1761,33 @@ const changeHpRegex = /^!(?<heal_or_damage>(heal|damage)) (?<target>('.+?'|\w+))
 function handleChangingHP(message) {
     OmniTracker.getBotDataMessages(message)
         .then(data => {
-        let tracker = new OmniTracker(data);
-        let parsed = message.content.match(changeHpRegex);
-        if (!parsed) {
-            message.reply("Invalid command syntax!");
-            return;
-        }
-        let character = tracker.characters[parsed.groups.target.toLowerCase()];
-        if (!character) {
-            throw new CharacterNotFoundError(parsed.groups.target);
-        }
-        else {
-            if (parsed.groups.heal_or_damage == "damage") {
-                var damageFunctionPromise = character.dealDamage(parsed.groups.delta);
+            let tracker = new OmniTracker(data);
+            let parsed = message.content.toLowerCase().match(changeHpRegex);
+
+            if (!parsed) {
+                message.reply('Invalid command syntax!');
+                return;
             }
-            else {
-                var damageFunctionPromise = character.healDamage(parsed.groups.delta);
-            }
-            damageFunctionPromise.then(() => {
-                tracker.updateTrackers();
-                character.showCharacterSynopsis(message.channel);
-                if (character.enemy && character.HP.currentHP == 0) {
-                    //Character was an enemy who died, remove and check to see if combat ends
-                    character
-                        .delete()
-                        .then(() => {
-                        delete tracker.characters[parsed.groups.target.toLowerCase()];
-                        return message.reply(`Enemy ${character.name} removed from combat.`);
-                    })
-                        .then(() => {
-                        let enemiesAlive = false;
-                        for (characterName in tracker.characters) {
-                            if (tracker.characters[characterName].enemy)
-                                enemiesAlive = true;
-                        }
-                        if (!enemiesAlive) {
-                            tracker.combat = false;
-                            delete tracker.combatCurrentInit;
-                            tracker.save();
-                            message.channel
-                                .send("No more enemies; ending combat.")
-                                .catch(error => {
-                                console.error(error);
-                            });
+
+            let character = tracker.characters[parsed.groups.target];
+            if (!character) {
+                throw new CharacterNotFoundError(parsed.groups.target);
+            } else {
+                if (parsed.groups.heal_or_damage == 'damage') {
+                    var damageFunctionPromise = character.dealDamage(parsed.groups.delta);
+                } else {
+                    var damageFunctionPromise = character.healDamage(parsed.groups.delta);
+                }
+                damageFunctionPromise.then(() => {
+                    tracker.updateTrackers();
+                    character.showCharacterSynopsis(message.channel);
+                    if (character.enemy && character.HP.currentHP == 0) {
+                        //Character was an enemy who died, remove and check to see if combat ends
+                        character.delete().then(() => {
+                            delete tracker.characters[parsed.groups.target.toLowerCase()];
+                            return message.reply(`Enemy ${character.name} removed from combat.`);
+                        }).then(() => {
+                            let enemiesAlive = false;
                             for (characterName in tracker.characters) {
                                 if (tracker.characters[characterName].properties["initiative"]) {
                                     tracker.characters[characterName].properties["initiative"].delete();
