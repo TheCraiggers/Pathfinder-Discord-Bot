@@ -1,7 +1,7 @@
 const Pageres = require("pageres");
 import { AxiosError, AxiosResponse } from "axios";
 import { dirSync, setGracefulCleanup } from "tmp";
-import { Client, Message, CollectorFilter, Collection } from "discord.js";
+import { Client, Message, CollectorFilter, Collection, PartialMessage } from "discord.js";
 const axios = require("axios");
 
 export default class lookup {
@@ -14,7 +14,7 @@ export default class lookup {
         }
       }
     });
-    client.on("messageUpdate", (oldMessage: Message, newMessage: Message) => {
+    client.on("messageUpdate", (oldMessage: Message|PartialMessage, newMessage: Message|PartialMessage) => {
       if (lookupCommandRegex.test(newMessage.content!)) {
         if (newMessage instanceof Message){
           lookupTerm(newMessage);
