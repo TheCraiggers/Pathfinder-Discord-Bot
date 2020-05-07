@@ -18,6 +18,7 @@
     "random-js": "^2.1.0",
     "rpg-dice-roller": "^4.0.3",
     "tmp": "^0.1.0",
+    "ts-jest": "^25.5.0",
     "tslint": "^6.1.2",
     "tslint-config-prettier": "^1.18.0",
     "tslint-eslint-rules": "^5.4.0"
@@ -27,7 +28,7 @@
     "typescript-tools": "^0.3.1"
   },
   "scripts": {
-    "test": "ts-jest",
+    "test": "jest",
     "tsc": "tsc",
     "tsc:w": "tsc -w",
     "watch": "nodemon",
