@@ -5,6 +5,8 @@ const discordToken = process.env.DISCORD_TOKEN;
 if (!discordToken)
     throw "No discord token found!";
 
+console.log('woo');
+
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
 });
