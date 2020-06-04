@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A bot to help in Pathfinder2 games",
   "main": "index.js",
+  "start": "node index.js"
   "dependencies": {
     "curlrequest": "^1.0.1",
     "discord.js": "^11.5.1",
