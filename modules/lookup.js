@@ -97,13 +97,15 @@ function getImageAndSend(message, ID) {
         throw `Invalid ID given. I can't lookup ${ID}`;
     
     console.log("Not Getting screenshot...");
-    console.log(message);
+//     console.log(message);
     console.log(ID);
     
     curl.request({url: 'https://pf2.easytool.es/index.php?id=' + ID, method:'GET'}, async function (err,response) {
         console.log(err);
 //         console.log(response);
         results = response.split('<article');
+        console.log('found ' + results.length + ' articles');
+        
         for (foo of responses) {
             if (foo.indexOf('mainContainer') > -1) {
                 console.log('gottem');
