@@ -95,11 +95,23 @@ function lookupTerm(message) {
 function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
-    let tmpdir = tmp.dirSync();
+    
     console.log("Not Getting screenshot...");
     console.log(message);
     console.log(ID);
-    message.channel.send(message);
+    
+    curl.request({url: 'https://pf2.easytool.es/index.php?id=' + ID, method:'GET'}, async function (err,response) {
+        console.log(err);
+        console.log(response);
+        results = response.split('<article');
+        for (foo of responses) {
+            if (foo.indexOf('mainContainer') > -1) {
+                console.log(foo);
+            }
+        }
+    });
+
+    message.channel.send('stuff');
     
 //     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
 //         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
