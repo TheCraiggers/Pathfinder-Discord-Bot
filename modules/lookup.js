@@ -102,10 +102,11 @@ function getImageAndSend(message, ID) {
     
     curl.request({url: 'https://pf2.easytool.es/index.php?id=' + ID, method:'GET'}, async function (err,response) {
         console.log(err);
-        console.log(response);
+//         console.log(response);
         results = response.split('<article');
         for (foo of responses) {
             if (foo.indexOf('mainContainer') > -1) {
+                console.log('gottem');
                 console.log(foo);
             }
         }
