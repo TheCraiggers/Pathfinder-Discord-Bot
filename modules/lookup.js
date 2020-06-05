@@ -97,6 +97,10 @@ function getImageAndSend(message, ID) {
         throw `Invalid ID given. I can't lookup ${ID}`;
     let tmpdir = tmp.dirSync();
     console.log("Not Getting screenshot...");
+    console.log(message);
+    console.log(ID);
+    message.channel.send(message);
+    
 //     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
 //         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
 //         .dest(tmpdir.name)
