@@ -107,14 +107,15 @@ function getImageAndSend(message, ID) {
         console.log('found ' + results.length + ' articles');
         
         for (foo of responses) {
-            if (foo.indexOf('mainContainer') > -1) {
+            console.log(foo);
+            
+            if (foo.indexOf('id=mainContainer') > -1) {
                 console.log('gottem');
-                console.log(foo);
             }
         }
+        
+        message.channel.send('stuff');
     });
-
-    message.channel.send('stuff');
     
 //     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
 //         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
