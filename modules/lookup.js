@@ -96,27 +96,29 @@ function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
     
-    console.log("Not Getting screenshot...");
-//     console.log(message);
-    console.log(ID);
+    message.channel.send("This ish don't work!");
     
-    curl.request({url: 'https://pf2.easytool.es/index.php?id=' + ID, method:'GET'}, async function (err,response) {
-        console.log(err);
-//         console.log(response);
-        results = response.split('<article');
-        console.log('found ' + results.length + ' articles');
+//     console.log("Not Getting screenshot...");
+// //     console.log(message);
+//     console.log(ID);
+    
+//     curl.request({url: 'https://pf2.easytool.es/index.php?id=' + ID, method:'GET'}, async function (err,response) {
+//         console.log(err);
+// //         console.log(response);
+//         results = response.split('<article');
+//         console.log('found ' + results.length + ' articles');
         
-        for (foo of results) {
-            console.log(foo.substr(0, 15));
+//         for (foo of results) {
+//             console.log(foo.substr(0, 15));
             
-            if (foo.indexOf('id="mainContainer"') > -1) {
-                console.log('gottem');
-                message.channel.send(foo);
-            }
+//             if (foo.indexOf('id="mainContainer"') > -1) {
+//                 console.log('gottem');
+//                 message.channel.send(foo);
+//             }
             
-            console.log('-------------------------');
-        }
-    });
+//             console.log('-------------------------');
+//         }
+//     });
     
 //     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
 //         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
