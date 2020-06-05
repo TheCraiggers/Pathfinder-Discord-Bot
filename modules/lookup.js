@@ -109,7 +109,7 @@ function getImageAndSend(message, ID) {
         for (foo of results) {
             console.log(foo.substr(0, 15));
             
-            if (foo.indexOf('id=mainContainer') > -1) {
+            if (foo.indexOf('id="mainContainer"') > -1) {
                 console.log('gottem');
             }
             
