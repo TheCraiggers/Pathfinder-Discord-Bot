@@ -106,8 +106,8 @@ function getImageAndSend(message, ID) {
         results = response.split('<article');
         console.log('found ' + results.length + ' articles');
         
-        for (foo of responses) {
-            console.log(foo);
+        for (foo of results) {
+//             console.log(foo);
             
             if (foo.indexOf('id=mainContainer') > -1) {
                 console.log('gottem');
