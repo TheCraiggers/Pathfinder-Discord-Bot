@@ -107,11 +107,13 @@ function getImageAndSend(message, ID) {
         console.log('found ' + results.length + ' articles');
         
         for (foo of results) {
-//             console.log(foo);
+            console.log(foo);
             
             if (foo.indexOf('id=mainContainer') > -1) {
                 console.log('gottem');
             }
+            
+            console.log('-------------------------');
         }
         
         message.channel.send('stuff');
