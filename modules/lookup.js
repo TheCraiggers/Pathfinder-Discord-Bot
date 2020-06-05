@@ -111,12 +111,11 @@ function getImageAndSend(message, ID) {
             
             if (foo.indexOf('id="mainContainer"') > -1) {
                 console.log('gottem');
+                message.channel.send(foo);
             }
             
             console.log('-------------------------');
         }
-        
-        message.channel.send('stuff');
     });
     
 //     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
