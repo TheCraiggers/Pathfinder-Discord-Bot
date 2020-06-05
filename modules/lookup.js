@@ -96,23 +96,23 @@ function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
     let tmpdir = tmp.dirSync();
-    console.log("Getting screenshot...");
-    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-        .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
-        .dest(tmpdir.name)
-        .run()
-        .then(function() {
-            console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
-            message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-            .then(msg => {
-                tmp.setGracefulCleanup();
-            })
-            .catch(error => {
-                console.error(error);
-                tmp.setGracefulCleanup();
-            });
-        })
-        .catch(console.error);
+    console.log("Not Getting screenshot...");
+//     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
+//         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
+//         .dest(tmpdir.name)
+//         .run()
+//         .then(function() {
+//             console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
+//             message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
+//             .then(msg => {
+//                 tmp.setGracefulCleanup();
+//             })
+//             .catch(error => {
+//                 console.error(error);
+//                 tmp.setGracefulCleanup();
+//             });
+//         })
+//         .catch(console.error);
 }
 
 module.exports = (client) => { return new lookup(client) }
