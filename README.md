@@ -19,6 +19,12 @@ Also, I wanted to create something to help my GM and fellow players.
 Once the bot is in your channel, you can use the following to lookup a term and have it delivered directly to your channel:
 * `!lookup <Pathfinder term>`
 
+## Heroku Deployment
+It is possible to deploy the bot on Heroku. **`!lookup` does not currently work when the bot is deployed in this way!**
+- Under Deploy, select your preferred deployment method
+- Under Resources, ensure that the **worker** Dyno is enabled
+- Under Settings > Config Vars, add DISCORD_TOKEN, <YOUR_DISCORD_TOKEN>
+
 ## Getting started with the tracker board for Players
 The omni tracker started out as a simple initiative tracker, but eventually became a massive feature that tracks nearly everything about a character. You can use the `!omni help` command in any channel to get a PM with various examples, but something as massive as the omni tracker demanded a tutorial to help players get started quickly. The following commands will add your character and set up some basic stats. Note that you could combine these into one long command; I've split them up into hopefully easier-to-digest chunks.
 
