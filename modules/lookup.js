@@ -95,47 +95,24 @@ function lookupTerm(message) {
 function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
-    
-    message.channel.send("This ish don't work!");
-    
-//     console.log("Not Getting screenshot...");
-// //     console.log(message);
-//     console.log(ID);
-    
-//     curl.request({url: 'https://pf2.easytool.es/index.php?id=' + ID, method:'GET'}, async function (err,response) {
-//         console.log(err);
-// //         console.log(response);
-//         results = response.split('<article');
-//         console.log('found ' + results.length + ' articles');
-        
-//         for (foo of results) {
-//             console.log(foo.substr(0, 15));
-            
-//             if (foo.indexOf('id="mainContainer"') > -1) {
-//                 console.log('gottem');
-//                 message.channel.send(foo);
-//             }
-            
-//             console.log('-------------------------');
-//         }
-//     });
-    
-//     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-//         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
-//         .dest(tmpdir.name)
-//         .run()
-//         .then(function() {
-//             console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
-//             message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-//             .then(msg => {
-//                 tmp.setGracefulCleanup();
-//             })
-//             .catch(error => {
-//                 console.error(error);
-//                 tmp.setGracefulCleanup();
-//             });
-//         })
-//         .catch(console.error);
+    let tmpdir = tmp.dirSync();
+    console.log("Getting screenshot...");
+    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
+        .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
+        .dest(tmpdir.name)
+        .run()
+        .then(function() {
+            console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
+            message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
+            .then(msg => {
+                tmp.setGracefulCleanup();
+            })
+            .catch(error => {
+                console.error(error);
+                tmp.setGracefulCleanup();
+            });
+        })
+        .catch(console.error);
 }
 
 module.exports = (client) => { return new lookup(client) }
