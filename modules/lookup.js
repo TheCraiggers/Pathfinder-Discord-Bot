@@ -97,9 +97,16 @@ function getImageAndSend(message, ID) {
         throw `Invalid ID given. I can't lookup ${ID}`;
     let tmpdir = tmp.dirSync();
     console.log("Getting screenshot...");
+    
     // temp: test no-sandbox args
     // args: ['--no-sandbox', '--disable-setuid-sandbox'] - does not work
-    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo', launchOptions: {args: ['--no-sandbox', '--disable-setuid-sandbox']}})
+    
+    // launchOptions: {args: ['--no-sandbox', '--disable-setuid-sandbox']} - this is what needs to be passed to pageres -> capture-website, 
+    // but pageres filters it out in finalOptions
+    // https://github.com/sindresorhus/pageres/blob/master/source/index.ts
+    // https://www.npmjs.com/package/capture-website
+    
+    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
         .dest(tmpdir.name)
         .run()
