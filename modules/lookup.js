@@ -97,7 +97,8 @@ function getImageAndSend(message, ID) {
         throw `Invalid ID given. I can't lookup ${ID}`;
     let tmpdir = tmp.dirSync();
     console.log("Getting screenshot...");
-    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
+    //temp: test no-sandbox args
+    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo', args: ['--no-sandbox', '--disable-setuid-sandbox']})
         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
         .dest(tmpdir.name)
         .run()
