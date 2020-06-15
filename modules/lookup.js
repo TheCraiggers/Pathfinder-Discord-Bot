@@ -92,7 +92,7 @@ function lookupTerm(message) {
     }); 
 }
 
-function getImageAndSend(message, ID) {
+async function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
     let tmpdir = tmp.dirSync();
@@ -140,7 +140,7 @@ function getImageAndSend(message, ID) {
     
     await writeFile(dest, screenshot);
     
-    console.log('Saving to ' + tmpdir.name+'/'+filename);
+    console.log('Saving to ' + dest);
     message.channel.send({files: [{attachment: tmpdir.name+'/' + filename,name:'results.png'}]})
     .then(msg => {
         tmp.setGracefulCleanup();
