@@ -1,4 +1,4 @@
-const Pageres = require('pageres');
+const captureWebsite = require('capture-website');
 const curl = require('curlrequest');
 const tmp = require('tmp');
 
@@ -106,22 +106,67 @@ function getImageAndSend(message, ID) {
     // https://github.com/sindresorhus/pageres/blob/master/source/index.ts
     // https://www.npmjs.com/package/capture-website
     
-    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-        .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
-        .dest(tmpdir.name)
-        .run()
-        .then(function() {
-            console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
-            message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-            .then(msg => {
-                tmp.setGracefulCleanup();
-            })
-            .catch(error => {
-                console.error(error);
-                tmp.setGracefulCleanup();
-            });
-        })
-        .catch(console.error);
+    let url = 'https://pf2.easytool.es/index.php?id='+ID,
+        dest = tmpdir.name,
+        filename = 'foo.png'
+        finalOptions = {
+            delay:0,
+            width:1024,
+            height:768,
+            timeout: options.timeout, //todo
+            fullPage: false, //!options.crop
+            styles: options.css && [options.css],
+            scripts: options.script && [options.script],
+            cookies: options.cookies, // TODO: Support string cookies in capture-website
+            element: 'article.result',
+            hideElements: options.hide,
+            scaleFactor: options.scale === undefined ? 1 : options.scale,
+            type: 'png',
+            userAgent: options.userAgent,
+            headers: options.headers,
+            launchOptions: {
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox'
+                ]
+            }
+        };
+    
+    const screenshot = await captureWebsite.buffer(url, finalOptions);
+    
+    await makeDir(dest);
+    
+    const dest = path.join(dest, filename);
+    
+    await writeFile(dest, screenshot);
+    
+    console.log('Saving to ' + tmpdir.name+'/'+filename);
+    message.channel.send({files: [{attachment: tmpdir.name+'/' + filename,name:'results.png'}]})
+    .then(msg => {
+        tmp.setGracefulCleanup();
+    })
+    .catch(error => {
+        console.error(error);
+        tmp.setGracefulCleanup();
+    });
+    
+    
+//     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
+//         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
+//         .dest(tmpdir.name)
+//         .run()
+//         .then(function() {
+//             console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
+//             message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
+//             .then(msg => {
+//                 tmp.setGracefulCleanup();
+//             })
+//             .catch(error => {
+//                 console.error(error);
+//                 tmp.setGracefulCleanup();
+//             });
+//         })
+//         .catch(console.error);
 }
 
 module.exports = (client) => { return new lookup(client) }
