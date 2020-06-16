@@ -5,6 +5,7 @@ const makeDir = require('make-dir');
 const util = require('util');
 const fs = require('fs');
 const writeFile = util.promisify(fs.writeFile);
+const path = require('path');
 
 class lookup {
     constructor (client) {
