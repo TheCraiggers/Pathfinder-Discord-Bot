@@ -113,17 +113,17 @@ async function getImageAndSend(message, ID) {
             delay:0,
             width:1024,
             height:768,
-            timeout: options.timeout, //todo
+//             timeout: options.timeout, //todo
             fullPage: false, //!options.crop
-            styles: options.css && [options.css],
-            scripts: options.script && [options.script],
-            cookies: options.cookies, // TODO: Support string cookies in capture-website
+//             styles: options.css && [options.css],
+//             scripts: options.script && [options.script],
+//             cookies: options.cookies, // TODO: Support string cookies in capture-website
             element: 'article.result',
-            hideElements: options.hide,
-            scaleFactor: options.scale === undefined ? 1 : options.scale,
+//             hideElements: options.hide,
+            scaleFactor: 1,
             type: 'png',
-            userAgent: options.userAgent,
-            headers: options.headers,
+//             userAgent: options.userAgent,
+//             headers: options.headers,
             launchOptions: {
                 args: [
                     '--no-sandbox',
