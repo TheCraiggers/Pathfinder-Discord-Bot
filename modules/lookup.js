@@ -136,9 +136,9 @@ async function getImageAndSend(message, ID) {
     
     await makeDir(dest);
     
-    const dest = path.join(dest, filename);
+    const fullPath = path.join(dest, filename);
     
-    await writeFile(dest, screenshot);
+    await writeFile(fullPath, screenshot);
     
     console.log('Saving to ' + dest);
     message.channel.send({files: [{attachment: tmpdir.name+'/' + filename,name:'results.png'}]})
