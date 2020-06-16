@@ -1,6 +1,10 @@
 const captureWebsite = require('capture-website');
 const curl = require('curlrequest');
 const tmp = require('tmp');
+const makeDir = require('make-dir');
+const promisify = require('util.promisify');
+const fs = require('fs');
+const writeFile = promisify(fs.writeFile);
 
 class lookup {
     constructor (client) {
