@@ -100,35 +100,21 @@ function lookupTerm(message) {
 async function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
-    let tmpdir = tmp.dirSync();
+    
     console.log("Getting screenshot...");
     
-    // temp: test no-sandbox args
-    // args: ['--no-sandbox', '--disable-setuid-sandbox'] - does not work
-    
-    // launchOptions: {args: ['--no-sandbox', '--disable-setuid-sandbox']} - this is what needs to be passed to pageres -> capture-website, 
-    // but pageres filters it out in finalOptions
-    // https://github.com/sindresorhus/pageres/blob/master/source/index.ts
-    // https://www.npmjs.com/package/capture-website
-    
-    let url = 'https://pf2.easytool.es/index.php?id='+ID,
+    let tmpdir = tmp.dirSync(),
+        url = 'https://pf2.easytool.es/index.php?id='+ID,
         dest = tmpdir.name,
         filename = 'foo.png'
         finalOptions = {
             delay:0,
             width:1024,
             height:768,
-//             timeout: options.timeout, //todo
-            fullPage: false, //!options.crop
-//             styles: options.css && [options.css],
-//             scripts: options.script && [options.script],
-//             cookies: options.cookies, // TODO: Support string cookies in capture-website
+            fullPage: false,
             element: 'article.result',
-//             hideElements: options.hide,
             scaleFactor: 1,
             type: 'png',
-//             userAgent: options.userAgent,
-//             headers: options.headers,
             launchOptions: {
                 args: [
                     '--no-sandbox',
@@ -154,24 +140,6 @@ async function getImageAndSend(message, ID) {
         console.error(error);
         tmp.setGracefulCleanup();
     });
-    
-    
-//     let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-//         .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
-//         .dest(tmpdir.name)
-//         .run()
-//         .then(function() {
-//             console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
-//             message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-//             .then(msg => {
-//                 tmp.setGracefulCleanup();
-//             })
-//             .catch(error => {
-//                 console.error(error);
-//                 tmp.setGracefulCleanup();
-//             });
-//         })
-//         .catch(console.error);
 }
 
 module.exports = (client) => { return new lookup(client) }
