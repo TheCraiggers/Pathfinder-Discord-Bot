@@ -20,7 +20,7 @@ Once the bot is in your channel, you can use the following to lookup a term and 
 * `!lookup <Pathfinder term>`
 
 ## Heroku Deployment
-It is possible to deploy the bot on Heroku. **`!lookup` does not currently work when the bot is deployed in this way!**
+It is possible to deploy the bot on Heroku.
 - Under Deploy, select your preferred deployment method
 - Under Resources, ensure that the **worker** Dyno is enabled
 - Under Settings > Config Vars, add DISCORD_TOKEN, <YOUR_DISCORD_TOKEN>
