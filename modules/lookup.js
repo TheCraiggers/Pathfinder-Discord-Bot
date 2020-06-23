@@ -1,6 +1,11 @@
-const Pageres = require('pageres');
+const captureWebsite = require('capture-website');
 const curl = require('curlrequest');
 const tmp = require('tmp');
+const makeDir = require('make-dir');
+const util = require('util');
+const fs = require('fs');
+const writeFile = util.promisify(fs.writeFile);
+const path = require('path');
 
 class lookup {
     constructor (client) {
@@ -92,27 +97,49 @@ function lookupTerm(message) {
     }); 
 }
 
-function getImageAndSend(message, ID) {
+async function getImageAndSend(message, ID) {
     if (ID < 1)
         throw `Invalid ID given. I can't lookup ${ID}`;
-    let tmpdir = tmp.dirSync();
+    
     console.log("Getting screenshot...");
-    let pageres = new Pageres({delay: 0, selector:'article.result', filename:'foo'})
-        .src('https://pf2.easytool.es/index.php?id='+ID, ['1024x768'], {crop: true})
-        .dest(tmpdir.name)
-        .run()
-        .then(function() {
-            console.log('Saving to ' + tmpdir.name+'/'+'foo.png');
-            message.channel.send({files: [{attachment: tmpdir.name+'/'+'foo.png',name:'results.png'}]})
-            .then(msg => {
-                tmp.setGracefulCleanup();
-            })
-            .catch(error => {
-                console.error(error);
-                tmp.setGracefulCleanup();
-            });
-        })
-        .catch(console.error);
+    
+    let tmpdir = tmp.dirSync(),
+        url = 'https://pf2.easytool.es/index.php?id='+ID,
+        dest = tmpdir.name,
+        filename = 'foo.png'
+        finalOptions = {
+            delay:0,
+            width:1024,
+            height:768,
+            fullPage: false,
+            element: 'article.result',
+            scaleFactor: 1,
+            type: 'png',
+            launchOptions: {
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox'
+                ]
+            }
+        };
+    
+    const screenshot = await captureWebsite.buffer(url, finalOptions);
+    
+    await makeDir(dest);
+    
+    const fullPath = path.join(dest, filename);
+    
+    await writeFile(fullPath, screenshot);
+    
+    console.log('Saving to ' + dest);
+    message.channel.send({files: [{attachment: tmpdir.name+'/' + filename,name:'results.png'}]})
+    .then(msg => {
+        tmp.setGracefulCleanup();
+    })
+    .catch(error => {
+        console.error(error);
+        tmp.setGracefulCleanup();
+    });
 }
 
 module.exports = (client) => { return new lookup(client) }
