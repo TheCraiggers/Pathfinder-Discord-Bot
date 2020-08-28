@@ -23,6 +23,7 @@ Once the bot is in your channel, you can use the following to lookup a term and 
 It is possible to deploy the bot on Heroku.
 - Under Deploy, select your preferred deployment method
 - Under Resources, ensure that the **worker** Dyno is enabled
+- Under Settings, add a buildpack of `https://github.com/jontewks/puppeteer-heroku-buildpack.git`
 - Under Settings > Config Vars, add DISCORD_TOKEN, <YOUR_DISCORD_TOKEN>
 
 ## Getting started with the tracker board for Players
