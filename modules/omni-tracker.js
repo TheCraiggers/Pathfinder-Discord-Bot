@@ -1548,7 +1548,7 @@ function handlePropertyCommands(command, message) {
             })
             .catch(error => {
                 console.error(error);
-                message.reply('Sorry, an error was encountered. Please check your command!');
+                OmniTracker.handleCommonErrors(message, error);
             });
             break;
 
