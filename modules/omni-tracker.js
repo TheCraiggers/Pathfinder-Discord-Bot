@@ -340,9 +340,14 @@ class Character {
     resolveReference(stuff) {
         // This will resolve properties and return the resolved value
         // This includes lookups for other stats, and any dice rolls that are needed.
-        
+
+        // First, if stuff is a simple number, just return that. No need to get fancy.
+        if (!isNaN(stuff)) {
+            return {result: Number(stuff), humanReadable: ''};
+        }
+
         // Loop through the property, and keep replacing properties with their contents until I run out of them
-        // Get a list of all stats, sorted from biggest to smallest. This is so I find and replace "foobar" before "foo"
+        // Get a list of all stats, sorted from biggest to smallest. This is so I find and replace "foobar" before "foo"        
         let sortedPropsList = Object.keys(this.properties).sort((a,b) => { 
             return this.properties[b].propertyName.length - this.properties[a].propertyName.length;
         });
@@ -353,9 +358,6 @@ class Character {
                 if (stuff.includes(propName)) {
                     dirty = true;
                     stuff = stuff.replace(propName, this.properties[propName].currentValue);
-                    if (!isNaN(stuff)) {
-                        stuff = stuff.toString();
-                    }
                     stuff = stuff.toLowerCase();
                 }
             }
@@ -396,7 +398,8 @@ class Character {
                 } else {
                     const resolvedReference = this.resolveReference(property.groups.propertyValue);
                     property.groups.propertyValue = resolvedReference.result;
-                    message.reply(`${resolvedReference.humanReadable}`);
+                    if (resolvedReference.humanReadable)
+                        message.reply(`${resolvedReference.humanReadable}`);
                 }
                 promises.push(this.setProperty(property.groups.propertyName, property.groups.propertyValue, important));
             } else {
