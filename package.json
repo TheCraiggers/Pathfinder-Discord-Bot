@@ -4,15 +4,14 @@
   "description": "A bot to help in Pathfinder2 games",
   "main": "index.js",
   "dependencies": {
+    "capture-website": "^0.4.0",
     "curlrequest": "^1.0.1",
     "discord.js": "^11.5.1",
-    "mathjs": "^6.6.0",
+    "make-dir": "^3.1.0",
     "moment": "^2.24.0",
-    "capture-website": "^0.4.0",
     "random-js": "^2.1.0",
-    "rpg-dice-roller": "^4.0.2",
-    "tmp": "^0.1.0",
-    "make-dir": "^3.1.0"
+    "rpg-dice-roller": "^4.5.2",
+    "tmp": "^0.1.0"
   },
   "devDependencies": {},
   "scripts": {

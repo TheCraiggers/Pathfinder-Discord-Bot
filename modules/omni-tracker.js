@@ -15,17 +15,19 @@ Some commands are typed often so shorter aliases are provided for them. This doe
 !init Stealth           (Roll the Stealth stat and save it as your Initiave)
 !heal Bob 5
 !damage Bob 5
-!time 1 min             (Alias for !omni add time tracker 1 min)
+
+# Dice rolling
+See https://greenimp.github.io/rpg-dice-roller/guide/notation/dice.html for help with dice notation and dice functions.
 
 # Stats:
 Characters can have various stats, whatever you want to track. HP and AC are common, but other things can be tracked as well.
 
-Also, stats can use {dice notation} and references to other stats. Just like in spreadsheets, prefixing with an equals sign
+Also, stats can use dice notation and references to other stats. Just like in spreadsheets, prefixing with an equals sign
 denotes a formula. For example, adding a dynamic stat called Perception could be written like:
-!omni set stat Bob Perception:={1d20}+Expert+WIS
+!omni set stat Bob Perception:=1d20+Expert+WIS
 
 After, you can do things like '!roll init:Perception' to roll your perception and set your initiative to the result. Fancy! Or even just '!init perception'
-If you don't like being fancy, '!roll init:{1d20+7}' still works.
+If you don't like being fancy, '!roll init:1d20+7' still works.
 
 # Special / Reserved stats:
 HP: Character health
@@ -57,22 +59,21 @@ var gmHelpMessage = `
 GM Commands:
 
 !omni add tracker here GM                   (Create a GM omni tracker in this channel. GM Trackers show more info than normal trackers, like enemy health.)
-!omni add enemy 'War Boss' AC:40 HP:300/300 Init:{1d20+10}
+!omni add enemy Boss AC:40 HP:300/300 Init:1d20+10
 !omni add time tracker 10min                (Moves time forward by 10 minutes)
-!omni add time tracker 5 hours
+!time 5 hours                               (!time is a shortcut)
 !omni set time tracker tomorrow             (Moves time forward until it's tomorrow morning)
 !omni set time tracker 13:00                (Moves time forward until it's 1pm)
-!omni set stat init Bob 15                       (Change Bob's initiative to 15)
-!omni set stat init Bob 15.1                     (Change Bob's initiative to 15.1, useful when players tie for initiative.)
+!omni set stat init Bob 15                  (Change Bob's initiative to 15)
+!omni set stat init Bob 15.1                (Change Bob's initiative to 15.1, useful when players tie for initiative.)
 !next                                       (When in combat, move to next character's turn)
 !omni set owner Bob @Bob                    (Sets the controller of the character to a specific user in Discord)
-!omni roll stat Bob Perception+{1d4}        (Rolls Bob's perception stat and adds 1d4 to it)
+!omni roll stat Bob Perception+1d4          (Rolls Bob's perception stat and adds 1d4 to it)
 \`\`\`
 `;
 
 var Moment = require('moment');
-var math = require('mathjs');
-const { DiceRoller } = require('rpg-dice-roller/lib/umd/bundle.js');
+const { DiceRoll, isNumber } = require('rpg-dice-roller/lib/umd/bundle.js');
 const diceRegex = /(?<diceString>{(?<diceNotation>.*?)})/g;
 const botCommandRegex = /^! ?(?<keyword>(omni help|omni setup|omni|roll|r|next|heal|damage|init|time))($| )/i;
 
@@ -137,7 +138,7 @@ class Property {
     constructor(name, currentValue, isAboveFold, characterName, dataMessage) {
         this.propertyName = name;
         this.currentValue = currentValue;
-        this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use show player
+        this.isAboveFold = isAboveFold;     //If it's always displayed along with your HP on the omni tracker. Otherwise, need to use the show player command to view
         this.dataMessage = dataMessage;
         this.character = characterName;
     }
@@ -334,50 +335,39 @@ class Character {
     /**
      * Computes a stat or dice roll
      * @param {String} stuff String containing what the roll
-     * @param {DiceRoller} roller Roller object
-     * @param {Number} depth Internal use only; for detecting circular references
      * @returns {Object} {Result: Number, HumanReadable: Outfit fit for a reply}
      */
-    resolveReference(stuff, roller, depth) {
-        //This will resolve properties and return the resolved value
-        //This includes lookups for other stats, and any dice rolls that are needed.
-        //This is RECURSIVE!
-
-        //Zeroth, if the property just contains an int, just return it.
-        if (Number.isInteger(stuff)) {
-            return {result: stuff, humanReadable: stuff};
-        }
-
-        if (depth === undefined) {
-            depth = 0;
-        } else if (depth > 30) {
-            throw "Circular reference detected!";
-        } else {
-            depth++;
-        }
-        let humanReadable = stuff;
-
-        //First, roll all dice, as mathjs won't understand those
-        let diceToRoll = stuff.matchAll(diceRegex);
-        for (const roll of diceToRoll) {
-            let diceRollResult = roller.roll(roll.groups.diceNotation).total;
-            humanReadable = humanReadable.replace(roll.groups.diceNotation, diceRollResult);
-            stuff = stuff.replace(roll.groups.diceString, diceRollResult);     //Replace all dice rolls with their numbers
-        }
-
-        //After all that, are there words left? If so, resolve them
-        let propertiesToEval = stuff.matchAll(Property.propertyReferencesRegex);
-        for (const propertyToEval of propertiesToEval) {
-            let property = this.properties[propertyToEval[0].toLowerCase()];
-            if (!property) {
-                throw new PropertyNotFoundError(propertyToEval[0], this.name);
+    resolveReference(stuff) {
+        // This will resolve properties and return the resolved value
+        // This includes lookups for other stats, and any dice rolls that are needed.
+        
+        // Loop through the property, and keep replacing properties with their contents until I run out of them
+        // Get a list of all stats, sorted from biggest to smallest. This is so I find and replace "foobar" before "foo"
+        let sortedPropsList = Object.keys(this.properties).sort((a,b) => { 
+            return this.properties[b].propertyName.length - this.properties[a].propertyName.length;
+        });
+        let dirty = true;
+        while (dirty) {
+            dirty = false;
+            for (const propName of sortedPropsList) {
+                if (stuff.includes(propName)) {
+                    dirty = true;
+                    stuff = stuff.replace(propName, this.properties[propName].currentValue);
+                    if (!isNaN(stuff)) {
+                        stuff = stuff.toString();
+                    }
+                    stuff = stuff.toLowerCase();
+                }
             }
-            let resolved = this.resolveReference(property.currentValue, roller, depth+1);
-            humanReadable = humanReadable.replace(propertyToEval[0], resolved.humanReadable);   //I don't use parens here because it's less readable
-            stuff = stuff.replace(propertyToEval[0], '(' + resolved.result + ')');
         }
+        
+        // I used to require curly braces around dice notation, but that's no longer needed. If they're around, remove them.
+        stuff = stuff.replace(/(\{|\})/g,'');
 
-        return {result: math.compile(stuff).evaluate(), humanReadable: humanReadable};
+        // Finally, roll the dice and do the math
+        const roll = new DiceRoll(stuff);
+
+        return {result: roll.total, humanReadable: roll.output};
     }
 
     /**
@@ -386,13 +376,17 @@ class Character {
      * @param {Message} message A Discord message object that comtained the command.
      */
     addProperty(propertiesString, message) {
-        const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-)+)))/g;
+        const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-|\/|\*|\(|\))+)))/g;
         let properties = propertiesString.matchAll(propertiesRegex);
         let reply = '';
         let promises = [];
         message.channel.startTyping();
         for (let property of properties) {
             property.groups.propertyName = Property.translateAliasedPropertyNames(property.groups.propertyName);
+            if (property.groups.propertyName == 'd') {
+                message.channel.stopTyping();
+                throw new OmniError("The property name 'd' is reserved and cannot be used, as it is used for dice rolling notation. Please try again with a new name.");
+            }
             let important = false;
             if (property.groups.important)
                 important = true;
@@ -400,11 +394,9 @@ class Character {
                 if (property.groups.propertyValue.startsWith('=')) {
                     property.groups.propertyValue = property.groups.propertyValue.replace('=','');   //Dynamic stats are set as is- no resolving.
                 } else {
-                    let roller = new DiceRoller();
-                    property.groups.propertyValue = this.resolveReference(property.groups.propertyValue, roller).result;
-                    if (roller.log.length > 0 && message) {
-                        message.reply(`${roller}`);
-                    }
+                    const resolvedReference = this.resolveReference(property.groups.propertyValue);
+                    property.groups.propertyValue = resolvedReference.result;
+                    message.reply(`${resolvedReference.humanReadable}`);
                 }
                 promises.push(this.setProperty(property.groups.propertyName, property.groups.propertyValue, important));
             } else {
@@ -1585,13 +1577,12 @@ function handlePropertyCommands(command, message) {
                 break;
             case 'roll':
                 OmniTracker.getTracker(message).then(tracker => {
-                    let roller = new DiceRoller();
                     let character = tracker.characters[command.groups.target.toLowerCase()];
                     if (!character) {
                         throw new CharacterNotFoundError(command.groups.target);
                     }
                     const stuffToRoll = command.groups.properties.match(rollPropertyRegex);
-                    const output = character.resolveReference(stuffToRoll.groups.sourceStat, roller);
+                    const output = character.resolveReference(stuffToRoll.groups.sourceStat);
                     if (!Number.isInteger(output.result)) {
                         throw "Did not get number from resolve reference";
                     }
@@ -1619,7 +1610,6 @@ const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>
 const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d(\S+)?)(?<rollComment>.*)$/i;
 function handleRollAliasCommands(message) {
     const command = message.content.match(rollCommandRegex);
-    let roller = new DiceRoller();
 
     if (!command) {
         message.reply('Invalid command!')
@@ -1630,7 +1620,7 @@ function handleRollAliasCommands(message) {
                 var tracker = new OmniTracker(data);
                 //Get the character for the message author so we know who's stat to roll
                 character = tracker.getCharacterFromAuthorID(message.author.id);
-                const output = character.resolveReference(command.groups.sourceStat, roller);
+                const output = character.resolveReference(command.groups.sourceStat);
                 if (!Number.isInteger(output.result)) {
                     throw "Invalid reference.";
                 }
@@ -1646,20 +1636,7 @@ function handleRollAliasCommands(message) {
                 tracker.updateTrackers();
             })
             .catch(error => {
-                //If the above was an error, it's probably straight dice notation. If not, return the error.
-                notation = message.content.match(diceNotationRegex);
-                if (!notation) {
                     OmniTracker.handleCommonErrors(message, error);
-                } else {
-                    try {
-                        roller.roll(notation.groups.diceNotation.replace('+-','-'));
-                        message.reply(`${roller};${notation.groups.rollComment}`);
-                    } catch(error){
-                        console.error(error)
-                        message.reply('Invalid roll command!')
-                        .catch(console.error);
-                    }
-                }
             });
         
     }
