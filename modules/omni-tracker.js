@@ -1586,7 +1586,7 @@ function handlePropertyCommands(command, message) {
                     }
                     const stuffToRoll = command.groups.properties.match(rollPropertyRegex);
                     const output = character.resolveReference(stuffToRoll.groups.sourceStat);
-                    if (!Number.isInteger(output.result)) {
+                    if (isNaN(output.result)) {
                         throw "Did not get number from resolve reference";
                     }
                     if (stuffToRoll.groups.destinationStat) {
@@ -1624,7 +1624,7 @@ function handleRollAliasCommands(message) {
                 //Get the character for the message author so we know who's stat to roll
                 character = tracker.getCharacterFromAuthorID(message.author.id);
                 const output = character.resolveReference(command.groups.sourceStat);
-                if (!Number.isInteger(output.result)) {
+                if (isNaN(output.result)) {
                     throw "Invalid reference.";
                 }
                 if (command.groups.destinationStat) {
