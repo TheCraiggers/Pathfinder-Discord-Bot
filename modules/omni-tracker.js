@@ -334,16 +334,19 @@ class Character {
 
     /**
      * Computes a stat or dice roll
-     * @param {String} stuff String containing what the roll
+     * @param {String} stuffToResolve String containing what the roll
      * @returns {Object} {Result: Number, HumanReadable: Outfit fit for a reply}
      */
-    resolveReference(stuff) {
+    resolveReference(stuffToResolve) {
         // This will resolve properties and return the resolved value
         // This includes lookups for other stats, and any dice rolls that are needed.
 
         // First, if stuff is a simple number, just return that. No need to get fancy.
-        if (!isNaN(stuff)) {
-            return {result: Number(stuff), humanReadable: ''};
+        // Otherwise, force it down to lowercase, since that's how everything is stored.
+        if (!isNaN(stuffToResolve)) {
+            return {result: Number(stuffToResolve), humanReadable: ''};
+        } else {
+            var stuff = stuffToResolve.toLowerCase();
         }
 
         // Loop through the property, and keep replacing properties with their contents until I run out of them
@@ -352,13 +355,25 @@ class Character {
             return this.properties[b].propertyName.length - this.properties[a].propertyName.length;
         });
         let dirty = true;
+        let depth = 0;
         while (dirty) {
             dirty = false;
             for (const propName of sortedPropsList) {
                 if (stuff.includes(propName)) {
                     dirty = true;
-                    stuff = stuff.replace(propName, this.properties[propName].currentValue);
+                    depth++;
+                    // Check for division or multiplication. If so, try to wrap stuff in parens to help the users.
+                    if (stuff.includes('*') || stuff.includes('/')) {
+                        stuff = stuff.replace(propName, `(${this.properties[propName].currentValue})`);    
+                    } else {
+                        stuff = stuff.replace(propName, this.properties[propName].currentValue);
+                    }
                     stuff = stuff.toLowerCase();
+                    // Restart in case the new prop brought in other props with bigger names.
+                    break;
+                }
+                if (depth > 100) {
+                    throw new OmniError("Error. Self-reference detected in your stat. Aborting before universe implodes.");
                 }
             }
         }
@@ -368,7 +383,6 @@ class Character {
 
         // Finally, roll the dice and do the math
         const roll = new DiceRoll(stuff);
-
         return {result: roll.total, humanReadable: roll.output};
     }
 
