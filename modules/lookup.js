@@ -436,6 +436,10 @@ function lookupTerm(message) {
                     disambiguousMessageCount++;
                     disambiguousMessageText = disambiguousMessageText + "(" + disambiguousMessageCount + ") " + result[1] + ' - ' + result[2] + "\n";
                 }
+                if (disambiguousMessageCount >= 30) {
+                  //If it gets too long, Discord will be unhappy, so break before that happens.
+                  break;
+                }
             }
         }   
         if (!searchResults || searchResults.length == 0) {
