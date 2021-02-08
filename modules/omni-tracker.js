@@ -379,7 +379,7 @@ class Character {
         }
         
         // I used to require curly braces around dice notation, but that's no longer needed. If they're around, remove them.
-        stuff = stuff.replace(/(\{|\})/g,'');
+        //stuff = stuff.replace(/(\{|\})/g,'');
 
         // Finally, roll the dice and do the math
         const roll = new DiceRoll(stuff);
@@ -1623,38 +1623,43 @@ function handlePropertyCommands(command, message) {
 
     }  
 }
-const rollCommandRegex = /^!r(oll)? (((?<destinationStat>\w+):)?)?(?<sourceStat>\S+)(?<rollComment>.*)$/;
-const diceNotationRegex = /^!r(oll)? (?<diceNotation>\S+d\d(\S+)?)(?<rollComment>.*)$/i;
+const rollCommandMessageRegex = /^!r(oll)? (?<rollCommands>.*)$/;
+const rollCommandRegex = /(?<rollCommand>\s*(((?<destinationStat>\w+):)?)?(?<sourceStat>[^,\s]+)\s?(?<rollComment>[^,]*))/gm;
 function handleRollAliasCommands(message) {
-    const command = message.content.match(rollCommandRegex);
+    const commandMessage = message.content.match(rollCommandMessageRegex);
 
-    if (!command) {
+    if (!commandMessage) {
         message.reply('Invalid command!')
         .catch(console.error);
     } else {
-        OmniTracker.getBotDataMessages(message)
-            .then(data => {
-                var tracker = new OmniTracker(data);
-                //Get the character for the message author so we know who's stat to roll
-                character = tracker.getCharacterFromAuthorID(message.author.id);
-                const output = character.resolveReference(command.groups.sourceStat);
+        const rollCommands = commandMessage.groups.rollCommands.matchAll(rollCommandRegex);
+        OmniTracker.getTracker(message).then(tracker => {
+            //Get the character for the message author so we know who's stat to roll
+            character = tracker.getCharacterFromAuthorID(message.author.id);
+            let returnMessage = '```\n';
+            for (const rollCommand of rollCommands) {
+                const output = character.resolveReference(rollCommand.groups.sourceStat);
                 if (isNaN(output.result)) {
-                    throw "Invalid reference.";
+                    throw `Invalid reference in ${roll}.`;
                 }
-                if (command.groups.destinationStat) {
-                    character.setProperty(command.groups.destinationStat, output.result);
-                    message.reply(`\`\`\`${command.groups.destinationStat} for ${character.name} has been set to ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
-                    .catch(console.error);
+                if (rollCommand.groups.rollComment ) {
+                    returnMessage += `${rollCommand.groups.rollComment}\n`
+                }
+                if (rollCommand.groups.destinationStat) {
+                    character.setProperty(rollCommand.groups.destinationStat, output.result);
+                    returnMessage += `${rollCommand.groups.destinationStat} for ${character.name} has been set to ${output.humanReadable}\n\n`;
                 } else {
-                    message.reply(`\`\`\`${command.groups.sourceStat} for ${character.name} is ${output.result};${command.groups.rollComment}\n${output.humanReadable}\`\`\``)
-                    .catch(console.error);
+                    returnMessage += `${rollCommand.groups.sourceStat} for ${character.name}; ${output.humanReadable}\n\n`;
                 }
-                tracker.saveBotData();
-                tracker.updateTrackers();
-            })
-            .catch(error => {
-                    OmniTracker.handleCommonErrors(message, error);
-            });
+            }
+            returnMessage += "\n```";
+            message.reply(returnMessage).catch(console.error);
+            tracker.saveBotData();
+            tracker.updateTrackers();
+        })
+        .catch(error => {
+                OmniTracker.handleCommonErrors(message, error);
+        });
         
     }
 }
