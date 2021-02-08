@@ -379,7 +379,7 @@ class Character {
         }
         
         // I used to require curly braces around dice notation, but that's no longer needed. If they're around, remove them.
-        //stuff = stuff.replace(/(\{|\})/g,'');
+        stuff = stuff.replace(/(\{|\})/g,'');
 
         // Finally, roll the dice and do the math
         const roll = new DiceRoll(stuff);
