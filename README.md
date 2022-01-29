@@ -1,3 +1,6 @@
+# Note about the project
+The bot supported, but not actively being worked on currently as it is in "good enough" status. It's used by myself and a few other groups every day to play PF2e on discord. While it's not without its flaws and occasional bug (see Issues) it's, again, good enough. The code base is ugly and difficult to support (see Code) and any energy I have goes to its sequel. PRs are still accepted if submitted, however.
+
 # Pathfinder Discord Bot
 *A bot to help Pathfinder 2e players using Discord.*
 
