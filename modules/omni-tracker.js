@@ -392,7 +392,7 @@ class Character {
      * @param {Message} message A Discord message object that comtained the command.
      */
     addProperty(propertiesString, message) {
-        const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|\]|\{|\}|\+|-|\/|\*|\(|\))+)))/g;
+        const propertiesRegex = /(?<important>!)?(?<propertyName>\w+):((?<propertyMinValue>\d+)(\/|\\)(?<propertyMaxValue>\d+)|(?<propertyValue>(=?(\w|\[|,|\]|\{|\}|\+|-|\/|\*|\(|\))+)))/g;
         let properties = propertiesString.matchAll(propertiesRegex);
         let reply = '';
         let promises = [];

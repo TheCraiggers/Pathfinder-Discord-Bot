@@ -12,6 +12,7 @@ The bot *is* supported, but not actively being worked on currently as it is in "
 * A robust spreadsheet-like reference system allowing for things like Perception={1d20+[Expert]+2}
 * Time of day and date tracker
 * Condition tracker that automatically updates durations based on elapsed time
+* Redimentary, ugly, hacky support for importing from PathBuilder (see import_from_pathbuilder.py) python script.
 
 ## Why?
 There are plenty of dice bots out there, but I wanted something to help track game state. And while there are some full-featured bots like Avrae, there are always quirks when using them for Pathfinder 2e, such as when players and monsters tie for initiative.
