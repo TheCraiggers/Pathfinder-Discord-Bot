@@ -1,7 +1,10 @@
 const Discord = require('discord.js');
 const client = new Discord.Client();
 
-const discordToken = process.env.DISCORD_TOKEN;
+// For replit deployment. Comment this out if using in dev instance
+const discordToken = process.env['DISCORD_TOKEN']
+// For dev work on local, use this
+// const discordToken = process.env.DISCORD_TOKEN;
 if (!discordToken)
     throw "No discord token found!";
 
